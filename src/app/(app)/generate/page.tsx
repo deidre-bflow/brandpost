@@ -14,56 +14,89 @@ const PLATFORM_OPTIONS: { value: Platform; label: string; icon: React.ComponentT
   { value: "linkedin",  label: "LinkedIn",  icon: LinkedInIcon,  color: "bg-sky-700" },
 ];
 
+// Last day offset from startDate for each combo
+const LAST_DAY_OFFSET: Record<string, number> = {
+  "2-2": 10, // 2/wk × 2wks → week1 Thu = 1*7+3=10
+  "2-4": 24, // 2/wk × 4wks → week3 Thu = 3*7+3=24
+  "4-2": 11, // 4/wk × 2wks → week1 Fri = 1*7+4=11
+  "4-4": 25, // 4/wk × 4wks → week3 Fri = 3*7+4=25
+};
+
+function ToggleGroup({ label, options, value, onChange }: {
+  label: string;
+  options: number[];
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{label}</label>
+      <div className="flex gap-2">
+        {options.map(opt => (
+          <button key={opt} type="button" onClick={() => onChange(opt)}
+            className={`flex-1 py-2.5 rounded-xl border text-sm font-bold transition-all ${
+              value === opt
+                ? "border-violet-400 bg-violet-50 text-violet-700 ring-1 ring-violet-400"
+                : "border-slate-200 bg-white text-slate-600 hover:border-violet-200"
+            }`}>
+            {opt}×
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function GeneratePage() {
   const searchParams   = useSearchParams();
   const router         = useRouter();
   const supabase       = createClient();
   const initialBrandId = searchParams.get("brandId") ?? "";
 
-  const [brands,     setBrands]     = useState<Brand[]>([]);
-  const [brandId,    setBrandId]    = useState(initialBrandId);
-  const [platforms,  setPlatforms]  = useState<Platform[]>(["facebook", "instagram", "linkedin"]);
-  const [startDate,  setStartDate]  = useState(format(new Date(), "yyyy-MM-dd"));
-  const [generating, setGenerating] = useState(false);
-  const [progress,   setProgress]   = useState("");
-  const [error,      setError]      = useState<string | null>(null);
-  const [done,       setDone]       = useState(false);
-  const [postCount,  setPostCount]  = useState(0);
+  const [brands,       setBrands]       = useState<Brand[]>([]);
+  const [brandId,      setBrandId]      = useState(initialBrandId);
+  const [platforms,    setPlatforms]    = useState<Platform[]>(["facebook", "instagram", "linkedin"]);
+  const [postsPerWeek, setPostsPerWeek] = useState(4);
+  const [weeks,        setWeeks]        = useState(4);
+  const [startDate,    setStartDate]    = useState(format(new Date(), "yyyy-MM-dd"));
+  const [generating,   setGenerating]   = useState(false);
+  const [progress,     setProgress]     = useState("");
+  const [error,        setError]        = useState<string | null>(null);
+  const [done,         setDone]         = useState(false);
+  const [postCount,    setPostCount]    = useState(0);
 
   useEffect(() => {
     supabase.from("brands").select("id, name, primary_color, logo_url").order("name")
       .then(({ data }) => setBrands((data ?? []) as Brand[]));
   }, []);
 
-  const togglePlatform = (p: Platform) => {
-    setPlatforms(prev =>
-      prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
-    );
-  };
+  const togglePlatform = (p: Platform) =>
+    setPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+
+  const totalPerPlatform = postsPerWeek * weeks;
+  const totalPosts       = totalPerPlatform * platforms.length;
+  const endOffset        = LAST_DAY_OFFSET[`${postsPerWeek}-${weeks}`] ?? 25;
+  const scheduleLabel    = postsPerWeek === 2 ? "Mon & Thu" : "Mon, Tue, Thu & Fri";
 
   const handleGenerate = async () => {
-    if (!brandId) { setError("Select a brand first"); return; }
+    if (!brandId)        { setError("Select a brand first");          return; }
     if (!platforms.length) { setError("Select at least one platform"); return; }
     setError(null);
     setGenerating(true);
     setProgress("");
     let totalCount = 0;
     try {
-      // One API call per platform — 16 posts each (~10s), well under Vercel 60s limit
       for (const platform of platforms) {
         setProgress(platform);
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, platform, startDate }),
+          body: JSON.stringify({ brandId, platform, startDate, postsPerWeek, weeks }),
         });
         const rawText = await res.text();
         let data: any;
-        try {
-          data = JSON.parse(rawText);
-        } catch {
-          throw new Error(`Server returned: ${rawText.slice(0, 300)}`);
-        }
+        try   { data = JSON.parse(rawText); }
+        catch { throw new Error(`Server returned: ${rawText.slice(0, 300)}`); }
         if (data.error) throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
         totalCount += data.count;
       }
@@ -85,7 +118,9 @@ export default function GeneratePage() {
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-2">Content Generated!</h2>
           <p className="text-slate-500 mb-1">{postCount} posts created across {platforms.length} platform{platforms.length !== 1 ? "s" : ""}</p>
-          <p className="text-slate-500 text-sm mb-6">Starting {format(new Date(startDate), "d MMM yyyy")} — view and approve in the Calendar</p>
+          <p className="text-slate-500 text-sm mb-6">
+            {postsPerWeek}×/week for {weeks} weeks — starting {format(new Date(startDate), "d MMM yyyy")}
+          </p>
           <div className="flex gap-3">
             <button onClick={() => { setDone(false); setBrandId(""); setPlatforms(["facebook","instagram","linkedin"]); }}
               className="flex-1 py-2.5 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50">
@@ -105,7 +140,7 @@ export default function GeneratePage() {
     <div className="p-8 max-w-xl">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900">Generate Content</h1>
-        <p className="text-slate-500 mt-1">AI creates 4 weeks of posts (4×/week) per platform in one click</p>
+        <p className="text-slate-500 mt-1">Choose your platforms, frequency, and duration — Claude does the rest</p>
       </div>
 
       <div className="space-y-6">
@@ -152,12 +187,22 @@ export default function GeneratePage() {
               </button>
             ))}
           </div>
-          {platforms.length > 0 && (
-            <p className="text-xs text-slate-400 mt-2">
-              Will generate {16 * platforms.length} posts (16 per platform — 4×/week for 4 weeks)
-            </p>
-          )}
         </div>
+
+        {/* Frequency + Weeks */}
+        <div className="grid grid-cols-2 gap-4">
+          <ToggleGroup label="Posts per week" options={[2, 4]} value={postsPerWeek} onChange={setPostsPerWeek} />
+          <ToggleGroup label="Number of weeks" options={[2, 4]} value={weeks}        onChange={setWeeks} />
+        </div>
+
+        {/* Summary */}
+        {platforms.length > 0 && (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600">
+            <span className="font-semibold text-slate-900">{totalPosts} posts total</span>
+            {" — "}
+            {totalPerPlatform} per platform · {postsPerWeek}×/week · {weeks} weeks
+          </div>
+        )}
 
         {/* Start date */}
         <div>
@@ -165,7 +210,7 @@ export default function GeneratePage() {
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           <p className="text-xs text-slate-400 mt-1">
-            Posts scheduled Mon/Tue/Thu/Fri from {format(new Date(startDate), "d MMM")} to {format(addDays(new Date(startDate), 25), "d MMM yyyy")}
+            Scheduled {scheduleLabel} from {format(new Date(startDate), "d MMM")} to {format(addDays(new Date(startDate), endOffset), "d MMM yyyy")}
           </p>
         </div>
 
@@ -178,7 +223,7 @@ export default function GeneratePage() {
           className="w-full py-4 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-bold text-base hover:from-violet-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-lg shadow-violet-200">
           {generating
             ? <><Loader2 className="h-5 w-5 animate-spin" /> Generating with Claude AI…</>
-            : <><Sparkles className="h-5 w-5" /> Generate 4 Weeks of Content</>
+            : <><Sparkles className="h-5 w-5" /> Generate {totalPerPlatform} Posts × {platforms.length} Platform{platforms.length !== 1 ? "s" : ""}</>
           }
         </button>
 

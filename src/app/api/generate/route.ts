@@ -1,28 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { generatePlatformContent, WEEKLY_DAY_OFFSETS } from "@/lib/anthropic";
+import { generatePlatformContent } from "@/lib/anthropic";
 import type { Brand, Platform } from "@/lib/types";
 import { addDays, format } from "date-fns";
 
 export const maxDuration = 60;
-export const preferredRegion = "iad1"; // US East — close to Anthropic API servers
+export const preferredRegion = "iad1";
 
-/** Maps postNumber (1-16) to a day offset from startDate.
- *  4 posts per week on Mon/Tue/Thu/Fri: offsets [0,1,3,4], [7,8,10,11], [14,15,17,18], [21,22,24,25]
- */
-function postToDayOffset(postNumber: number): number {
-  const idx = postNumber - 1;          // 0-based
-  const week = Math.floor(idx / 4);    // 0-3
-  const dayInWeek = idx % 4;           // 0-3
-  return week * 7 + WEEKLY_DAY_OFFSETS[dayInWeek];
+// Day offsets within a week for each posts-per-week setting
+const WEEK_OFFSETS: Record<number, number[]> = {
+  2: [0, 3],       // Mon, Thu
+  4: [0, 1, 3, 4], // Mon, Tue, Thu, Fri
+};
+
+function postToDayOffset(postNumber: number, postsPerWeek: number): number {
+  const offsets = WEEK_OFFSETS[postsPerWeek] ?? WEEK_OFFSETS[4];
+  const idx        = postNumber - 1;
+  const week       = Math.floor(idx / postsPerWeek);
+  const dayInWeek  = idx % postsPerWeek;
+  return week * 7 + offsets[dayInWeek];
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { brandId, platform, startDate } = await req.json() as {
+    const { brandId, platform, startDate, postsPerWeek = 4, weeks = 4 } = await req.json() as {
       brandId: string;
       platform: Platform;
       startDate: string;
+      postsPerWeek?: number;
+      weeks?: number;
     };
 
     if (!brandId || !platform) {
@@ -40,9 +46,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Brand not found" }, { status: 404 });
     }
 
-    const posts = await generatePlatformContent(brand as Brand, platform);
+    const totalPosts = (postsPerWeek ?? 4) * (weeks ?? 4);
+    const posts = await generatePlatformContent(brand as Brand, platform, totalPosts);
 
-    const batchId = `${brandId}-${Date.now()}`;
+    const batchId  = `${brandId}-${Date.now()}`;
     const baseDate = new Date(startDate);
 
     const rows = posts.map((p) => ({
@@ -50,7 +57,10 @@ export async function POST(req: NextRequest) {
       platform:         p.platform,
       content:          p.content,
       image_prompt:     p.image_prompt,
-      scheduled_for:    format(addDays(baseDate, postToDayOffset(p.postNumber)), "yyyy-MM-dd'T'10:00:00"),
+      scheduled_for:    format(
+        addDays(baseDate, postToDayOffset(p.postNumber, postsPerWeek ?? 4)),
+        "yyyy-MM-dd'T'10:00:00"
+      ),
       status:           "draft",
       generation_batch: batchId,
     }));

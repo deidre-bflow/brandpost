@@ -19,10 +19,11 @@ export interface GeneratedPost {
   postNumber: number; // 1–16
 }
 
-/** Generate 16 posts (4/week × 4 weeks) for a single platform */
+/** Generate posts for a single platform. totalPosts = postsPerWeek × weeks (e.g. 4×4=16, 2×2=4) */
 export async function generatePlatformContent(
   brand: Brand,
-  platform: Platform
+  platform: Platform,
+  totalPosts: number = 16
 ): Promise<GeneratedPost[]> {
   const pillars = brand.content_pillars?.length
     ? brand.content_pillars.join(", ")
@@ -32,7 +33,7 @@ export async function generatePlatformContent(
     ? brand.products.join(", ")
     : null;
 
-  const prompt = `You are a social media content strategist. Generate exactly 16 posts (4 per week × 4 weeks).
+  const prompt = `You are a social media content strategist. Generate exactly ${totalPosts} posts.
 
 BRAND: ${brand.name}
 Industry: ${brand.industry ?? "general"} | Tone: ${brand.tone ?? "professional"}
@@ -46,7 +47,7 @@ PLATFORM: ${platform}
 GUIDELINE: ${PLATFORM_GUIDES[platform]}
 
 INSTRUCTIONS:
-- Generate exactly 16 posts numbered 1 through 16
+- Generate exactly ${totalPosts} posts numbered 1 through ${totalPosts}
 - Spread all content pillars naturally across the 16 posts
 - Each post must feel distinct — no repetitive phrasing or structure
 - image_prompt: Professional commercial photography prompt for Ideogram AI. Strict rules:
@@ -58,7 +59,7 @@ INSTRUCTIONS:
   6. One concise descriptive sentence only
 - Return ONLY a valid JSON array — no markdown, no explanation
 
-[{"postNumber":1,"platform":"${platform}","content":"...","image_prompt":"..."},...]`;
+[{"postNumber":1,"platform":"${platform}","content":"...","image_prompt":"..."},{"postNumber":${totalPosts},...}]`;
 
   const message = await client.messages.create({
     model: "claude-haiku-4-5",
