@@ -15,6 +15,7 @@ export interface Brand {
   tone: Tone | null;
   target_audience: string | null;
   content_pillars: string[];
+  products: string[];
   notes: string | null;
   created_at: string;
   updated_at: string;

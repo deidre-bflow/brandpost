@@ -22,6 +22,7 @@ export default function NewBrandPage() {
   const [tone,           setTone]           = useState<Tone>("professional");
   const [audience,       setAudience]       = useState("");
   const [pillars,        setPillars]        = useState<string[]>(["", "", ""]);
+  const [products,       setProducts]       = useState<string[]>(["", ""]);
   const [notes,          setNotes]          = useState("");
   const [scraping,       setScraping]       = useState(false);
   const [saving,         setSaving]         = useState(false);
@@ -67,6 +68,7 @@ export default function NewBrandPage() {
       tone,
       target_audience: audience || null,
       content_pillars: pillars.filter(Boolean),
+      products:        products.filter(Boolean),
       notes:           notes || null,
     });
     if (error) { setError(error.message); setSaving(false); return; }
@@ -186,6 +188,27 @@ export default function NewBrandPage() {
                 className="text-xs text-violet-600 font-semibold hover:underline">+ Add pillar</button>
             )}
           </div>
+        </div>
+
+        {/* Products / Equipment */}
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">
+            Products / Equipment <span className="text-slate-400 font-normal normal-case">(used for image variety — list each product/machine)</span>
+          </label>
+          <div className="space-y-2">
+            {products.map((p, i) => (
+              <input key={i} value={p} onChange={e => {
+                const next = [...products]; next[i] = e.target.value; setProducts(next);
+              }}
+                placeholder={`e.g. L958F Wheel Loader`}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            ))}
+            {products.length < 10 && (
+              <button type="button" onClick={() => setProducts([...products, ""])}
+                className="text-xs text-violet-600 font-semibold hover:underline">+ Add product</button>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 mt-1.5">Each product gets its own image style — the more you list, the more variety in generated images</p>
         </div>
 
         {/* Notes */}

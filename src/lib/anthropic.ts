@@ -28,12 +28,17 @@ export async function generatePlatformContent(
     ? brand.content_pillars.join(", ")
     : "brand awareness, product highlights, industry insights, customer stories, tips & education";
 
+  const productList = brand.products?.length
+    ? brand.products.join(", ")
+    : null;
+
   const prompt = `You are a social media content strategist. Generate exactly 16 posts (4 per week × 4 weeks).
 
 BRAND: ${brand.name}
 Industry: ${brand.industry ?? "general"} | Tone: ${brand.tone ?? "professional"}
 Audience: ${brand.target_audience ?? "general audience"}
 Content Pillars: ${pillars}
+${productList ? `Products/Equipment: ${productList}` : ""}
 Brand Notes: ${brand.notes ?? "none"}
 Brand Color: ${brand.primary_color ?? "#000000"}
 
@@ -44,7 +49,13 @@ INSTRUCTIONS:
 - Generate exactly 16 posts numbered 1 through 16
 - Spread all content pillars naturally across the 16 posts
 - Each post must feel distinct — no repetitive phrasing or structure
-- image_prompt: one vivid sentence describing an AI-generated image that fits the post, incorporating brand color ${brand.primary_color ?? "#000000"}
+- image_prompt: Professional commercial photography prompt for Ideogram AI. Rules:
+  1. NEVER include brand names, logos, or any text/lettering in the image — AI image generators misspell text
+  2. VARY the subject for each post — use DIFFERENT products from the list above in each post (not the same machine every time)
+  3. VARY the scenario: active job site work, close-up equipment detail, operator in cab, aerial view, dawn lighting, muddy terrain, city construction, mining site, etc.
+  4. VARY the angle: wide establishing shot, dramatic low angle, overhead, tight detail shot
+  5. Use cinematic professional photography style, golden hour or dramatic lighting
+  6. Keep it one concise sentence
 - Return ONLY a valid JSON array — no markdown, no explanation
 
 [{"postNumber":1,"platform":"${platform}","content":"...","image_prompt":"..."},...]`;
