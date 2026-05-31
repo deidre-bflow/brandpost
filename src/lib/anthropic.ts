@@ -50,8 +50,8 @@ INSTRUCTIONS:
 [{"postNumber":1,"platform":"${platform}","content":"...","image_prompt":"..."},...]`;
 
   const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 6000,
+    model: "claude-haiku-4-5",
+    max_tokens: 4000,
     messages: [{ role: "user", content: prompt }],
   });
 
