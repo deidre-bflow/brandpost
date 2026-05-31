@@ -64,7 +64,7 @@ export default function GeneratePage() {
         } catch {
           throw new Error(`Server returned: ${rawText.slice(0, 300)}`);
         }
-        if (data.error) throw new Error(data.error);
+        if (data.error) throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
         totalCount += data.count;
       }
       setPostCount(totalCount);
