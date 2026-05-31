@@ -4,14 +4,60 @@ export interface ScrapedBrand {
   logo_url: string | null;
   primary_color: string | null;
   colors: string[];
+  partial?: boolean;
 }
 
+const BROWSER_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Cache-Control": "no-cache",
+};
+
 export async function scrapeBrandFromUrl(url: string): Promise<ScrapedBrand> {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (BrandFlow brand-kit scraper)" },
-    signal: AbortSignal.timeout(8000),
-  });
-  const html = await res.text();
+  const base = new URL(url);
+  let html: string | null = null;
+
+  // Primary fetch with browser-like headers
+  try {
+    const res = await fetch(url, {
+      headers: {
+        ...BROWSER_HEADERS,
+        Referer: base.origin,
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.ok) {
+      html = await res.text();
+    }
+  } catch {
+    // fall through to favicon fallback
+  }
+
+  // Favicon fallback — at minimum return the domain name
+  if (!html) {
+    const faviconUrl = `${base.origin}/favicon.ico`;
+    let faviconAvailable = false;
+    try {
+      const faviconRes = await fetch(faviconUrl, {
+        headers: BROWSER_HEADERS,
+        signal: AbortSignal.timeout(4000),
+      });
+      faviconAvailable = faviconRes.ok;
+    } catch {
+      // favicon also unreachable
+    }
+    return {
+      name: base.hostname.replace(/^www\./, ""),
+      description: null,
+      logo_url: faviconAvailable ? faviconUrl : null,
+      primary_color: null,
+      colors: [],
+      partial: true,
+    };
+  }
 
   // ── Extract with regex (no cheerio on edge runtime) ──────────────
 
@@ -38,7 +84,6 @@ export async function scrapeBrandFromUrl(url: string): Promise<ScrapedBrand> {
     null;
 
   // Resolve relative URLs
-  const base = new URL(url);
   const logo_url = logoRaw
     ? (logoRaw.startsWith("http") ? logoRaw : new URL(logoRaw, base).href)
     : null;
@@ -58,7 +103,6 @@ export async function scrapeBrandFromUrl(url: string): Promise<ScrapedBrand> {
       const r = parseInt(full.slice(1, 3), 16);
       const g = parseInt(full.slice(3, 5), 16);
       const b = parseInt(full.slice(5, 7), 16);
-      // Skip very light (>220) or very dark (<20) on all channels
       const tooLight = r > 220 && g > 220 && b > 220;
       const tooDark  = r < 20  && g < 20  && b < 20;
       return !tooLight && !tooDark;

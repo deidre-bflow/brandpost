@@ -9,6 +9,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (err: any) {
     console.error("[scrape-brand]", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Website scan unavailable — fill in manually" },
+      { status: 500 }
+    );
   }
 }
