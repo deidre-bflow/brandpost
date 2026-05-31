@@ -5,6 +5,7 @@ import type { Brand, Platform } from "@/lib/types";
 import { addDays, format } from "date-fns";
 
 export const maxDuration = 60;
+export const preferredRegion = "iad1"; // US East — close to Anthropic API servers
 
 /** Maps postNumber (1-16) to a day offset from startDate.
  *  4 posts per week on Mon/Tue/Thu/Fri: offsets [0,1,3,4], [7,8,10,11], [14,15,17,18], [21,22,24,25]
@@ -59,7 +60,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, count: rows.length, batchId });
   } catch (err: any) {
-    console.error("[generate]", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const msg = err?.message ?? err?.error?.message ?? JSON.stringify(err) ?? "Unknown error";
+    console.error("[generate]", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
