@@ -4,9 +4,9 @@ import type { Brand, Platform } from "./types";
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const PLATFORM_GUIDES: Record<Platform, string> = {
-  facebook: "Facebook post: conversational tone, 100-250 words, can include a question to drive engagement, 1-3 relevant hashtags at end.",
-  instagram: "Instagram caption: visually descriptive, punchy opening line, 80-150 words, 5-10 relevant hashtags at end, include a CTA.",
-  linkedin: "LinkedIn post: professional tone, thought-leadership angle, 100-200 words, 2-4 industry hashtags, end with an insight or question.",
+  facebook: "Facebook post: conversational tone, 60-100 words, optional question to drive engagement, 1-2 hashtags at end.",
+  instagram: "Instagram caption: punchy opening line, 50-80 words, 4-6 hashtags at end, include a CTA.",
+  linkedin: "LinkedIn post: professional tone, thought-leadership angle, 60-100 words, 2-3 hashtags, end with insight or question.",
 };
 
 interface GeneratedPost {
@@ -50,7 +50,7 @@ INSTRUCTIONS:
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 12000,
+    max_tokens: 16000,
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -59,7 +59,14 @@ INSTRUCTIONS:
     .map((b) => (b as { type: "text"; text: string }).text)
     .join("");
 
-  const clean = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+  let clean = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+
+  // Repair truncated JSON array: find last complete object and close the array
+  if (!clean.endsWith("]")) {
+    const lastBrace = clean.lastIndexOf("}");
+    if (lastBrace !== -1) clean = clean.slice(0, lastBrace + 1) + "]";
+  }
+
   const posts: GeneratedPost[] = JSON.parse(clean);
   return posts;
 }
