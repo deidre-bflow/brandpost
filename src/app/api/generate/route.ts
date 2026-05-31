@@ -4,6 +4,8 @@ import { generate30DayContent } from "@/lib/anthropic";
 import type { Brand, Platform } from "@/lib/types";
 import { addDays, format } from "date-fns";
 
+export const maxDuration = 60; // Vercel Hobby max — upgrade to Pro for 300s
+
 export async function POST(req: NextRequest) {
   try {
     const { brandId, platforms, startDate } = await req.json() as {

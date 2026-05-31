@@ -60,9 +60,8 @@ OUTPUT FORMAT (JSON array):
 Generate ${30 * platforms.length} posts total (30 per platform).`;
 
   const message = await client.messages.create({
-    model: "claude-opus-4-7",
+    model: "claude-sonnet-4-6",
     max_tokens: 16000,
-    thinking: { type: "adaptive" },
     messages: [{ role: "user", content: prompt }],
   });
 
