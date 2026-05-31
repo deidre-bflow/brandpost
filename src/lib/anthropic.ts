@@ -49,13 +49,13 @@ INSTRUCTIONS:
 - Generate exactly 16 posts numbered 1 through 16
 - Spread all content pillars naturally across the 16 posts
 - Each post must feel distinct — no repetitive phrasing or structure
-- image_prompt: Professional commercial photography prompt for Ideogram AI. Rules:
-  1. NEVER include brand names, logos, or any text/lettering in the image — AI image generators misspell text
-  2. VARY the subject for each post — use DIFFERENT products from the list above in each post (not the same machine every time)
-  3. VARY the scenario: active job site work, close-up equipment detail, operator in cab, aerial view, dawn lighting, muddy terrain, city construction, mining site, etc.
-  4. VARY the angle: wide establishing shot, dramatic low angle, overhead, tight detail shot
-  5. Use cinematic professional photography style, golden hour or dramatic lighting
-  6. Keep it one concise sentence
+- image_prompt: Professional commercial photography prompt for Ideogram AI. Strict rules:
+  1. NO brand names, logos, or any readable text/lettering anywhere in the image
+  2. The equipment/product MUST be painted in the brand color ${brand.primary_color ?? "#f5a623"} — this is the brand's signature equipment colour
+  3. VARY the specific product shown — rotate through different products from the list above across the 16 posts, never repeat the same machine consecutively
+  4. VARY the scenario each time: active construction dig, road compaction work, loading material, grading a dirt road, mining site, urban infrastructure project, close-up cab detail, operator POV, aerial establishing shot, dawn golden hour, dusty African bushveld backdrop, etc.
+  5. Use cinematic product photography style — dramatic lighting, dust particles, motion blur on moving parts
+  6. One concise descriptive sentence only
 - Return ONLY a valid JSON array — no markdown, no explanation
 
 [{"postNumber":1,"platform":"${platform}","content":"...","image_prompt":"..."},...]`;
