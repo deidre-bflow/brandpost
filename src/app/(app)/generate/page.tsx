@@ -51,7 +51,13 @@ export default function GeneratePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brandId, platforms, startDate }),
       });
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(`Server returned: ${rawText.slice(0, 300)}`);
+      }
       if (data.error) throw new Error(data.error);
       setPostCount(data.count);
       setDone(true);
