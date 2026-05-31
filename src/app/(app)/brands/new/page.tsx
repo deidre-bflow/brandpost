@@ -22,8 +22,7 @@ export default function NewBrandPage() {
   const [tone,           setTone]           = useState<Tone>("professional");
   const [audience,       setAudience]       = useState("");
   const [pillars,        setPillars]        = useState<string[]>(["", "", ""]);
-  const [products,       setProducts]       = useState<string[]>(["", ""]);
-  const [productImages,  setProductImages]  = useState<Record<string, string>>({});
+  const [productList,    setProductList]    = useState<{name:string;url:string}[]>([{name:"",url:""},{name:"",url:""}]);
   const [notes,          setNotes]          = useState("");
   const [scraping,       setScraping]       = useState(false);
   const [saving,         setSaving]         = useState(false);
@@ -69,8 +68,8 @@ export default function NewBrandPage() {
       tone,
       target_audience: audience || null,
       content_pillars: pillars.filter(Boolean),
-      products:        products.filter(Boolean),
-      product_images:  productImages,
+      products:        productList.map(p => p.name).filter(Boolean),
+      product_images:  Object.fromEntries(productList.filter(p => p.name && p.url).map(p => [p.name, p.url])),
       notes:           notes || null,
     });
     if (error) { setError(error.message); setSaving(false); return; }
@@ -198,22 +197,22 @@ export default function NewBrandPage() {
             Products / Equipment <span className="text-slate-400 font-normal normal-case">(used for image variety — list each product/machine)</span>
           </label>
           <div className="space-y-2">
-            {products.map((p, i) => (
+            {productList.map((p, i) => (
               <div key={i} className="flex gap-2">
-                <input value={p} onChange={e => {
-                  const next = [...products]; next[i] = e.target.value; setProducts(next);
+                <input value={p.name} onChange={e => {
+                  const n = [...productList]; n[i] = {...n[i], name: e.target.value}; setProductList(n);
                 }}
                   placeholder="e.g. Wheel Loader"
                   className="w-1/3 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
-                <input value={productImages[p] ?? ""} onChange={e => {
-                  if (p) setProductImages(prev => ({ ...prev, [p]: e.target.value }));
+                <input value={p.url} onChange={e => {
+                  const n = [...productList]; n[i] = {...n[i], url: e.target.value}; setProductList(n);
                 }}
                   placeholder="Reference photo URL (optional)"
                   className="flex-1 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
               </div>
             ))}
-            {products.length < 10 && (
-              <button type="button" onClick={() => setProducts([...products, ""])}
+            {productList.length < 10 && (
+              <button type="button" onClick={() => setProductList([...productList, {name:"",url:""}])}
                 className="text-xs text-violet-600 font-semibold hover:underline">+ Add product</button>
             )}
           </div>
