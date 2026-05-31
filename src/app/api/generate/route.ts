@@ -1,19 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { generatePlatformBatch } from "@/lib/anthropic";
+import { generatePlatformContent, WEEKLY_DAY_OFFSETS } from "@/lib/anthropic";
 import type { Brand, Platform } from "@/lib/types";
 import { addDays, format } from "date-fns";
 
 export const maxDuration = 60;
 
+/** Maps postNumber (1-16) to a day offset from startDate.
+ *  4 posts per week on Mon/Tue/Thu/Fri: offsets [0,1,3,4], [7,8,10,11], [14,15,17,18], [21,22,24,25]
+ */
+function postToDayOffset(postNumber: number): number {
+  const idx = postNumber - 1;          // 0-based
+  const week = Math.floor(idx / 4);    // 0-3
+  const dayInWeek = idx % 4;           // 0-3
+  return week * 7 + WEEKLY_DAY_OFFSETS[dayInWeek];
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { brandId, platform, startDate, startDay, count } = await req.json() as {
+    const { brandId, platform, startDate } = await req.json() as {
       brandId: string;
       platform: Platform;
       startDate: string;
-      startDay: number;   // e.g. 1, 11, 21
-      count: number;      // e.g. 10
     };
 
     if (!brandId || !platform) {
@@ -31,7 +39,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Brand not found" }, { status: 404 });
     }
 
-    const posts = await generatePlatformBatch(brand as Brand, platform, startDay ?? 1, count ?? 10);
+    const posts = await generatePlatformContent(brand as Brand, platform);
 
     const batchId = `${brandId}-${Date.now()}`;
     const baseDate = new Date(startDate);
@@ -41,7 +49,7 @@ export async function POST(req: NextRequest) {
       platform:         p.platform,
       content:          p.content,
       image_prompt:     p.image_prompt,
-      scheduled_for:    format(addDays(baseDate, p.day - 1), "yyyy-MM-dd'T'10:00:00"),
+      scheduled_for:    format(addDays(baseDate, postToDayOffset(p.postNumber)), "yyyy-MM-dd'T'10:00:00"),
       status:           "draft",
       generation_batch: batchId,
     }));

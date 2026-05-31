@@ -48,29 +48,25 @@ export default function GeneratePage() {
     setGenerating(true);
     setProgress("");
     let totalCount = 0;
-    const BATCH_SIZE = 10;
-    const BATCHES = 3; // 3 × 10 = 30 days
     try {
+      // One API call per platform — 16 posts each (~10s), well under Vercel 60s limit
       for (const platform of platforms) {
-        for (let b = 0; b < BATCHES; b++) {
-          const startDay = b * BATCH_SIZE + 1;
-          setProgress(`${platform} — days ${startDay}–${startDay + BATCH_SIZE - 1}`);
-          const res = await fetch("/api/generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ brandId, platform, startDate, startDay, count: BATCH_SIZE }),
-          });
-          const rawText = await res.text();
-          let data: any;
-          try {
-            data = JSON.parse(rawText);
-          } catch {
-            throw new Error(`Server returned: ${rawText.slice(0, 300)}`);
-          }
-          if (data.error) throw new Error(data.error);
-          totalCount += data.count;
-        } // end batch loop
-      } // end platform loop
+        setProgress(platform);
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brandId, platform, startDate }),
+        });
+        const rawText = await res.text();
+        let data: any;
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          throw new Error(`Server returned: ${rawText.slice(0, 300)}`);
+        }
+        if (data.error) throw new Error(data.error);
+        totalCount += data.count;
+      }
       setPostCount(totalCount);
       setDone(true);
     } catch (e: any) {
@@ -109,7 +105,7 @@ export default function GeneratePage() {
     <div className="p-8 max-w-xl">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900">Generate Content</h1>
-        <p className="text-slate-500 mt-1">AI creates 30 days of platform-optimised posts in one click</p>
+        <p className="text-slate-500 mt-1">AI creates 4 weeks of posts (4×/week) per platform in one click</p>
       </div>
 
       <div className="space-y-6">
@@ -158,7 +154,7 @@ export default function GeneratePage() {
           </div>
           {platforms.length > 0 && (
             <p className="text-xs text-slate-400 mt-2">
-              Will generate {30 * platforms.length} posts ({30} per platform)
+              Will generate {16 * platforms.length} posts (16 per platform — 4×/week for 4 weeks)
             </p>
           )}
         </div>
@@ -169,7 +165,7 @@ export default function GeneratePage() {
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           <p className="text-xs text-slate-400 mt-1">
-            Posts will be scheduled daily from {format(new Date(startDate), "d MMM")} to {format(addDays(new Date(startDate), 29), "d MMM yyyy")}
+            Posts scheduled Mon/Tue/Thu/Fri from {format(new Date(startDate), "d MMM")} to {format(addDays(new Date(startDate), 25), "d MMM yyyy")}
           </p>
         </div>
 
@@ -182,16 +178,16 @@ export default function GeneratePage() {
           className="w-full py-4 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-bold text-base hover:from-violet-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-lg shadow-violet-200">
           {generating
             ? <><Loader2 className="h-5 w-5 animate-spin" /> Generating with Claude AI…</>
-            : <><Sparkles className="h-5 w-5" /> Generate 30 Days of Content</>
+            : <><Sparkles className="h-5 w-5" /> Generate 4 Weeks of Content</>
           }
         </button>
 
         {generating && (
           <div className="text-center space-y-1">
             <p className="text-sm text-slate-500 animate-pulse">
-              ✦ Writing <span className="font-semibold capitalize">{progress}</span>…
+              ✦ Writing <span className="font-semibold capitalize">{progress}</span> posts…
             </p>
-            <p className="text-xs text-slate-400">Generating in batches — about 90 seconds total</p>
+            <p className="text-xs text-slate-400">~10 seconds per platform</p>
           </div>
         )}
       </div>
