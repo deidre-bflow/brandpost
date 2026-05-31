@@ -16,15 +16,16 @@ interface GeneratedPost {
   day: number;
 }
 
-export async function generate30DayContent(
+/** Generate 30 posts for a SINGLE platform — keeps each API call small and fast */
+export async function generatePlatformContent(
   brand: Brand,
-  platforms: Platform[]
+  platform: Platform
 ): Promise<GeneratedPost[]> {
   const pillars = brand.content_pillars?.length
     ? brand.content_pillars.join(", ")
     : "general brand awareness, product/service highlights, industry insights, customer success stories, tips and education";
 
-  const prompt = `You are a social media content strategist. Generate a 30-day content calendar for the following brand.
+  const prompt = `You are a social media content strategist. Generate exactly 30 posts for ONE platform.
 
 BRAND PROFILE:
 - Name: ${brand.name}
@@ -35,44 +36,44 @@ BRAND PROFILE:
 - Brand Notes: ${brand.notes ?? "None"}
 - Primary Color: ${brand.primary_color ?? "#000000"}
 
-PLATFORMS REQUESTED: ${platforms.join(", ")}
-
-PLATFORM GUIDELINES:
-${platforms.map((p) => `• ${PLATFORM_GUIDES[p]}`).join("\n")}
+PLATFORM: ${platform}
+GUIDELINE: ${PLATFORM_GUIDES[platform]}
 
 INSTRUCTIONS:
-- Generate posts for days 1-30, varying content pillars naturally
+- Generate exactly 30 posts for days 1–30
+- Vary the content pillars naturally across the 30 days
 - Each post must feel distinct — no repetitive phrasing
-- Include an image_prompt: a short (1 sentence) visual description for an AI image generator that matches the post, incorporates the brand's primary color ${brand.primary_color ?? "#000000"}, and suits the platform
-- Return ONLY a valid JSON array, no markdown fences, no explanation
+- image_prompt: one sentence describing an AI-generated image matching the post, using the brand's primary color ${brand.primary_color ?? "#000000"}
+- Return ONLY a valid JSON array — no markdown, no explanation, nothing else
 
-OUTPUT FORMAT (JSON array):
-[
-  {
-    "day": 1,
-    "platform": "facebook",
-    "content": "post text here",
-    "image_prompt": "image generation prompt here"
-  },
-  ...
-]
-
-Generate ${30 * platforms.length} posts total (30 per platform).`;
+[{"day":1,"platform":"${platform}","content":"...","image_prompt":"..."},...]`;
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 16000,
+    max_tokens: 12000,
     messages: [{ role: "user", content: prompt }],
   });
 
-  // Extract text content
   const text = message.content
     .filter((b) => b.type === "text")
     .map((b) => (b as { type: "text"; text: string }).text)
     .join("");
 
-  // Parse JSON — strip any accidental markdown fences
   const clean = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
   const posts: GeneratedPost[] = JSON.parse(clean);
   return posts;
+}
+
+/** Generate 30 days for all requested platforms — calls API once per platform */
+export async function generate30DayContent(
+  brand: Brand,
+  platforms: Platform[]
+): Promise<GeneratedPost[]> {
+  // Sequential per-platform calls — keeps each under 15 seconds
+  const results: GeneratedPost[] = [];
+  for (const platform of platforms) {
+    const posts = await generatePlatformContent(brand, platform);
+    results.push(...posts);
+  }
+  return results;
 }
