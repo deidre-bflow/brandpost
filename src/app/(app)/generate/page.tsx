@@ -25,6 +25,7 @@ export default function GeneratePage() {
   const [platforms,  setPlatforms]  = useState<Platform[]>(["facebook", "instagram", "linkedin"]);
   const [startDate,  setStartDate]  = useState(format(new Date(), "yyyy-MM-dd"));
   const [generating, setGenerating] = useState(false);
+  const [progress,   setProgress]   = useState("");
   const [error,      setError]      = useState<string | null>(null);
   const [done,       setDone]       = useState(false);
   const [postCount,  setPostCount]  = useState(0);
@@ -45,25 +46,31 @@ export default function GeneratePage() {
     if (!platforms.length) { setError("Select at least one platform"); return; }
     setError(null);
     setGenerating(true);
+    setProgress("");
     let totalCount = 0;
+    const BATCH_SIZE = 10;
+    const BATCHES = 3; // 3 × 10 = 30 days
     try {
-      // Call API once per platform — keeps each call under 20s (within Vercel 60s limit)
       for (const platform of platforms) {
-        const res = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, platforms: [platform], startDate }),
-        });
-        const rawText = await res.text();
-        let data: any;
-        try {
-          data = JSON.parse(rawText);
-        } catch {
-          throw new Error(`Server returned: ${rawText.slice(0, 300)}`);
-        }
-        if (data.error) throw new Error(data.error);
-        totalCount += data.count;
-      }
+        for (let b = 0; b < BATCHES; b++) {
+          const startDay = b * BATCH_SIZE + 1;
+          setProgress(`${platform} — days ${startDay}–${startDay + BATCH_SIZE - 1}`);
+          const res = await fetch("/api/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ brandId, platform, startDate, startDay, count: BATCH_SIZE }),
+          });
+          const rawText = await res.text();
+          let data: any;
+          try {
+            data = JSON.parse(rawText);
+          } catch {
+            throw new Error(`Server returned: ${rawText.slice(0, 300)}`);
+          }
+          if (data.error) throw new Error(data.error);
+          totalCount += data.count;
+        } // end batch loop
+      } // end platform loop
       setPostCount(totalCount);
       setDone(true);
     } catch (e: any) {
@@ -180,9 +187,12 @@ export default function GeneratePage() {
         </button>
 
         {generating && (
-          <p className="text-center text-sm text-slate-400 animate-pulse">
-            Claude is writing {30 * platforms.length} posts… this takes ~30 seconds
-          </p>
+          <div className="text-center space-y-1">
+            <p className="text-sm text-slate-500 animate-pulse">
+              ✦ Writing <span className="font-semibold capitalize">{progress}</span>…
+            </p>
+            <p className="text-xs text-slate-400">Generating in batches — about 90 seconds total</p>
+          </div>
         )}
       </div>
     </div>

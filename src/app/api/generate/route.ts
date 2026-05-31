@@ -1,26 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { generate30DayContent } from "@/lib/anthropic";
+import { generatePlatformBatch } from "@/lib/anthropic";
 import type { Brand, Platform } from "@/lib/types";
 import { addDays, format } from "date-fns";
 
-export const maxDuration = 60; // Vercel Hobby max — upgrade to Pro for 300s
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
-    const { brandId, platforms, startDate } = await req.json() as {
+    const { brandId, platform, startDate, startDay, count } = await req.json() as {
       brandId: string;
-      platforms: Platform[];
-      startDate: string; // ISO date string
+      platform: Platform;
+      startDate: string;
+      startDay: number;   // e.g. 1, 11, 21
+      count: number;      // e.g. 10
     };
 
-    if (!brandId || !platforms?.length) {
-      return NextResponse.json({ error: "brandId and platforms required" }, { status: 400 });
+    if (!brandId || !platform) {
+      return NextResponse.json({ error: "brandId and platform required" }, { status: 400 });
     }
 
     const supabase = await createAdminClient();
 
-    // Fetch brand
     const { data: brand, error: brandErr } = await supabase
       .from("brands")
       .select("*")
@@ -30,14 +31,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Brand not found" }, { status: 404 });
     }
 
-    // Generate content with Claude
-    const posts = await generate30DayContent(brand as Brand, platforms);
+    const posts = await generatePlatformBatch(brand as Brand, platform, startDay ?? 1, count ?? 10);
 
-    // Batch ID to group this generation
     const batchId = `${brandId}-${Date.now()}`;
     const baseDate = new Date(startDate);
 
-    // Build rows to insert
     const rows = posts.map((p) => ({
       brand_id:         brandId,
       platform:         p.platform,
