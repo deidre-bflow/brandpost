@@ -45,21 +45,26 @@ export default function GeneratePage() {
     if (!platforms.length) { setError("Select at least one platform"); return; }
     setError(null);
     setGenerating(true);
+    let totalCount = 0;
     try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brandId, platforms, startDate }),
-      });
-      const rawText = await res.text();
-      let data: any;
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        throw new Error(`Server returned: ${rawText.slice(0, 300)}`);
+      // Call API once per platform — keeps each call under 20s (within Vercel 60s limit)
+      for (const platform of platforms) {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brandId, platforms: [platform], startDate }),
+        });
+        const rawText = await res.text();
+        let data: any;
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          throw new Error(`Server returned: ${rawText.slice(0, 300)}`);
+        }
+        if (data.error) throw new Error(data.error);
+        totalCount += data.count;
       }
-      if (data.error) throw new Error(data.error);
-      setPostCount(data.count);
+      setPostCount(totalCount);
       setDone(true);
     } catch (e: any) {
       setError(e.message);
