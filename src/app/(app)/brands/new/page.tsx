@@ -23,6 +23,7 @@ export default function NewBrandPage() {
   const [audience,       setAudience]       = useState("");
   const [pillars,        setPillars]        = useState<string[]>(["", "", ""]);
   const [products,       setProducts]       = useState<string[]>(["", ""]);
+  const [productImages,  setProductImages]  = useState<Record<string, string>>({});
   const [notes,          setNotes]          = useState("");
   const [scraping,       setScraping]       = useState(false);
   const [saving,         setSaving]         = useState(false);
@@ -69,6 +70,7 @@ export default function NewBrandPage() {
       target_audience: audience || null,
       content_pillars: pillars.filter(Boolean),
       products:        products.filter(Boolean),
+      product_images:  productImages,
       notes:           notes || null,
     });
     if (error) { setError(error.message); setSaving(false); return; }
@@ -197,18 +199,25 @@ export default function NewBrandPage() {
           </label>
           <div className="space-y-2">
             {products.map((p, i) => (
-              <input key={i} value={p} onChange={e => {
-                const next = [...products]; next[i] = e.target.value; setProducts(next);
-              }}
-                placeholder={`e.g. L958F Wheel Loader`}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+              <div key={i} className="flex gap-2">
+                <input value={p} onChange={e => {
+                  const next = [...products]; next[i] = e.target.value; setProducts(next);
+                }}
+                  placeholder="e.g. Wheel Loader"
+                  className="w-1/3 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                <input value={productImages[p] ?? ""} onChange={e => {
+                  if (p) setProductImages(prev => ({ ...prev, [p]: e.target.value }));
+                }}
+                  placeholder="Reference photo URL (optional)"
+                  className="flex-1 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+              </div>
             ))}
             {products.length < 10 && (
               <button type="button" onClick={() => setProducts([...products, ""])}
                 className="text-xs text-violet-600 font-semibold hover:underline">+ Add product</button>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-1.5">Each product gets its own image style — the more you list, the more variety in generated images</p>
+          <p className="text-xs text-slate-400 mt-1.5">Paste a direct photo URL per product — Ideogram will remix your actual machine into new scenes</p>
         </div>
 
         {/* Notes */}

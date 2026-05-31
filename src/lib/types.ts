@@ -16,6 +16,7 @@ export interface Brand {
   target_audience: string | null;
   content_pillars: string[];
   products: string[];
+  product_images: Record<string, string>; // { "Road Roller": "https://..." }
   notes: string | null;
   created_at: string;
   updated_at: string;
