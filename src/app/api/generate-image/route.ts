@@ -53,19 +53,35 @@ async function overlayLogo(imageBuffer: Buffer, logoUrl: string): Promise<Buffer
   }
 }
 
-/** Find the first product whose name appears in the image prompt */
+/** Find the best-matching product reference URL for an image prompt.
+ *  Scores by how many meaningful words from the product name appear in the prompt.
+ *  e.g. prompt "yellow wheel loader on site" matches product "L9100H Wheel Loader" (2 words). */
 function findReferenceUrl(
   prompt: string,
   productImages: Record<string, string>
 ): string | null {
   if (!productImages || !prompt) return null;
   const promptLower = prompt.toLowerCase();
+
+  let bestUrl: string | null = null;
+  let bestScore = 0;
+
   for (const [productName, url] of Object.entries(productImages)) {
-    if (url && promptLower.includes(productName.toLowerCase())) {
-      return url;
+    if (!url) continue;
+
+    // Full name match wins immediately
+    if (promptLower.includes(productName.toLowerCase())) return url;
+
+    // Word-level scoring — only words 4+ chars to skip "and", "the" etc.
+    const words = productName.toLowerCase().split(/\s+/).filter(w => w.length >= 4);
+    const score = words.filter(w => promptLower.includes(w)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestUrl   = url;
     }
   }
-  return null;
+
+  return bestScore > 0 ? bestUrl : null;
 }
 
 export async function POST(req: NextRequest) {
