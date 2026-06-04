@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, isToday } from "date-fns";
-import { ChevronLeft, ChevronRight, ImageIcon, Check, Loader2, Copy, Filter } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImageIcon, Check, Loader2, Copy, Filter, Upload } from "lucide-react";
 import { FacebookIcon, InstagramIcon, LinkedInIcon } from "@/components/PlatformIcons";
 import type { Post, Brand, Platform } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,7 @@ export default function CalendarPage() {
   const [selectedDay,   setSelectedDay]  = useState<Date | null>(null);
   const [loading,       setLoading]      = useState(true);
   const [generatingImg, setGeneratingImg]= useState<string | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -84,6 +85,34 @@ export default function CalendarPage() {
     } finally {
       setGeneratingImg(null);
     }
+  };
+
+  const handleUploadMedia = (post: Post) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      setUploadingMedia(post.id);
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch(`/api/posts/${post.id}/upload-media`, {
+          method: "POST",
+          body: form,
+        });
+        const data = await res.json();
+        if (data.image_url) {
+          setPosts(prev => prev.map(p => p.id === post.id ? { ...p, image_url: data.image_url } : p));
+        } else if (data.video_url) {
+          setPosts(prev => prev.map(p => p.id === post.id ? { ...p, video_url: data.video_url } : p));
+        }
+      } finally {
+        setUploadingMedia(null);
+      }
+    };
+    input.click();
   };
 
   const handleCopy = (content: string) => {
@@ -204,20 +233,62 @@ export default function CalendarPage() {
                       )}
                     </div>
 
-                    {/* Image */}
-                    {post.image_url ? (
-                      <img src={post.image_url} alt="post image" className="w-full aspect-square object-cover" />
+                    {/* Media */}
+                    {post.video_url ? (
+                      <div className="relative">
+                        <video
+                          src={post.video_url}
+                          controls
+                          className="w-full aspect-square object-cover bg-black"
+                        />
+                        <button
+                          onClick={() => handleUploadMedia(post)}
+                          disabled={uploadingMedia === post.id}
+                          className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md bg-black/60 hover:bg-black/80 text-white text-[10px] font-semibold transition-colors"
+                        >
+                          {uploadingMedia === post.id
+                            ? <><Loader2 className="h-3 w-3 animate-spin" /> Uploading…</>
+                            : <><Upload className="h-3 w-3" /> Replace</>
+                          }
+                        </button>
+                      </div>
+                    ) : post.image_url ? (
+                      <div className="relative">
+                        <img src={post.image_url} alt="post image" className="w-full aspect-square object-cover" />
+                        <button
+                          onClick={() => handleUploadMedia(post)}
+                          disabled={uploadingMedia === post.id}
+                          className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md bg-black/60 hover:bg-black/80 text-white text-[10px] font-semibold transition-colors"
+                        >
+                          {uploadingMedia === post.id
+                            ? <><Loader2 className="h-3 w-3 animate-spin" /> Uploading…</>
+                            : <><Upload className="h-3 w-3" /> Replace</>
+                          }
+                        </button>
+                      </div>
                     ) : (
-                      <button
-                        onClick={() => handleGenerateImage(post)}
-                        disabled={generatingImg === post.id}
-                        className="w-full aspect-square bg-slate-50 hover:bg-slate-100 flex flex-col items-center justify-center gap-2 text-slate-400 transition-colors"
-                      >
-                        {generatingImg === post.id
-                          ? <><Loader2 className="h-6 w-6 animate-spin" /><span className="text-xs">Generating image…</span></>
-                          : <><ImageIcon className="h-6 w-6" /><span className="text-xs font-medium">Generate Image</span></>
-                        }
-                      </button>
+                      <div className="w-full aspect-square bg-slate-50 flex flex-col items-center justify-center gap-2.5">
+                        <button
+                          onClick={() => handleGenerateImage(post)}
+                          disabled={generatingImg === post.id || uploadingMedia === post.id}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-semibold transition-colors disabled:opacity-50"
+                        >
+                          {generatingImg === post.id
+                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
+                            : <><ImageIcon className="h-3.5 w-3.5" /> Generate Image</>
+                          }
+                        </button>
+                        <button
+                          onClick={() => handleUploadMedia(post)}
+                          disabled={generatingImg === post.id || uploadingMedia === post.id}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition-colors disabled:opacity-50"
+                        >
+                          {uploadingMedia === post.id
+                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
+                            : <><Upload className="h-3.5 w-3.5" /> Upload Media</>
+                          }
+                        </button>
+                      </div>
                     )}
 
                     {/* Content */}
