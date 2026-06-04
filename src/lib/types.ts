@@ -33,8 +33,21 @@ export interface Post {
   scheduled_for: string | null;
   status: PostStatus;
   generation_batch: string | null;
+  // client review
+  client_comment: string | null;
+  client_approved: boolean;
+  client_approved_at: string | null;
   created_at: string;
   updated_at: string;
   // joined
   brand?: Pick<Brand, "id" | "name" | "primary_color" | "logo_url">;
+}
+
+export interface ReviewLink {
+  id: string;
+  token: string;
+  brand_id: string;
+  label: string | null;
+  expires_at: string | null;
+  created_at: string;
 }

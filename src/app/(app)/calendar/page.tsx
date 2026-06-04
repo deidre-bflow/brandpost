@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, isToday } from "date-fns";
-import { ChevronLeft, ChevronRight, ImageIcon, Check, Loader2, Copy, Filter, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImageIcon, Check, Loader2, Copy, Filter, Upload, Share2, X, Link2 } from "lucide-react";
 import { FacebookIcon, InstagramIcon, LinkedInIcon } from "@/components/PlatformIcons";
 import type { Post, Brand, Platform } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -25,8 +25,12 @@ export default function CalendarPage() {
   const [selectedBrand, setSelectedBrand]= useState<string>("all");
   const [selectedDay,   setSelectedDay]  = useState<Date | null>(null);
   const [loading,       setLoading]      = useState(true);
-  const [generatingImg, setGeneratingImg]= useState<string | null>(null);
+  const [generatingImg, setGeneratingImg]   = useState<string | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState<string | null>(null);
+  const [shareModal, setShareModal]         = useState(false);
+  const [shareUrl, setShareUrl]             = useState<string | null>(null);
+  const [shareLoading, setShareLoading]     = useState(false);
+  const [shareCopied, setShareCopied]       = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -115,6 +119,38 @@ export default function CalendarPage() {
     input.click();
   };
 
+  const handleShare = async () => {
+    const brandId = selectedBrand === "all" ? null : selectedBrand;
+    if (!brandId) {
+      setShareModal(true);
+      setShareUrl(null);
+      return;
+    }
+    setShareModal(true);
+    setShareUrl(null);
+    setShareLoading(true);
+    try {
+      const res  = await fetch("/api/review-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId }),
+      });
+      const data = await res.json();
+      if (data.token) {
+        setShareUrl(`${window.location.origin}/review/${data.token}`);
+      }
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleCopyShareUrl = () => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  };
+
   const handleCopy = (content: string) => {
     navigator.clipboard.writeText(content);
   };
@@ -141,7 +177,7 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          {/* Brand filter */}
+          {/* Brand filter + Share */}
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-slate-400" />
             <select value={selectedBrand} onChange={e => setSelectedBrand(e.target.value)}
@@ -149,7 +185,91 @@ export default function CalendarPage() {
               <option value="all">All brands</option>
               {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              Share for Review
+            </button>
           </div>
+
+          {/* Share modal */}
+          {shareModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-lg">Share for client review</h3>
+                    <p className="text-sm text-slate-500 mt-0.5">Send this link to your client — no login required.</p>
+                  </div>
+                  <button onClick={() => { setShareModal(false); setShareUrl(null); }}
+                    className="p-1 rounded-lg hover:bg-slate-100 text-slate-400">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {selectedBrand === "all" && !shareUrl ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-slate-600">Select a brand to create a review link for:</p>
+                    <div className="space-y-2">
+                      {brands.map(b => (
+                        <button
+                          key={b.id}
+                          onClick={async () => {
+                            setShareLoading(true);
+                            const res  = await fetch("/api/review-links", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ brandId: b.id }),
+                            });
+                            const data = await res.json();
+                            if (data.token) setShareUrl(`${window.location.origin}/review/${data.token}`);
+                            setShareLoading(false);
+                          }}
+                          disabled={shareLoading}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 hover:border-violet-300 hover:bg-violet-50 text-sm font-medium text-slate-700 transition-all text-left disabled:opacity-50"
+                        >
+                          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: (b as any).primary_color ?? "#8b5cf6" }} />
+                          {b.name}
+                          {shareLoading && <Loader2 className="h-3.5 w-3.5 animate-spin ml-auto" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : shareLoading ? (
+                  <div className="flex items-center justify-center py-6 gap-2 text-slate-400">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm">Creating link…</span>
+                  </div>
+                ) : shareUrl ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <Link2 className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                      <span className="text-xs text-slate-600 truncate flex-1">{shareUrl}</span>
+                    </div>
+                    <button
+                      onClick={handleCopyShareUrl}
+                      className={cn(
+                        "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all",
+                        shareCopied
+                          ? "bg-green-500 text-white"
+                          : "bg-violet-600 hover:bg-violet-700 text-white"
+                      )}
+                    >
+                      {shareCopied
+                        ? <><Check className="h-4 w-4" /> Copied!</>
+                        : <><Copy className="h-4 w-4" /> Copy link</>
+                      }
+                    </button>
+                    <p className="text-xs text-slate-400 text-center">
+                      Your client can view and approve all draft posts — no account needed.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Day headers */}
