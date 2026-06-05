@@ -9,70 +9,111 @@ export interface ScrapedBrand {
 
 // ── Colour helpers ────────────────────────────────────────────────────────────
 
-/** Normalise any CSS colour value to #RRGGBB or null */
-function normaliseColor(raw: string): string | null {
-  raw = raw.trim();
-
-  // #RGB or #RRGGBB
+function normaliseHex(raw: string): string | null {
   const hex6 = raw.match(/^#([0-9a-fA-F]{6})$/);
   if (hex6) return `#${hex6[1].toUpperCase()}`;
-
   const hex3 = raw.match(/^#([0-9a-fA-F]{3})$/);
   if (hex3) {
     const [r, g, b] = hex3[1].split("").map(c => c + c);
     return `#${(r + g + b).toUpperCase()}`;
   }
-
-  // rgb(r, g, b)
-  const rgb = raw.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (rgb) {
-    const hex = [rgb[1], rgb[2], rgb[3]]
-      .map(n => parseInt(n).toString(16).padStart(2, "0"))
-      .join("")
-      .toUpperCase();
-    return `#${hex}`;
-  }
-
   return null;
 }
 
-/** Is this colour too close to white, black, or a neutral grey to be a brand colour? */
-function isNeutral(hex: string): boolean {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const lightness = (max + min) / 2 / 255;
-  const saturation = max === min ? 0 : (max - min) / (1 - Math.abs(2 * lightness - 1)) / 255;
-  // Skip near-white (lightness > 0.92), near-black (lightness < 0.08), near-grey (saturation < 0.1)
-  return lightness > 0.92 || lightness < 0.08 || saturation < 0.1;
+  const l = (max + min) / 2;
+  const s = max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r)      h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else                h = (r - g) / d + 4;
+    h = Math.round(h * 60);
+    if (h < 0) h += 360;
+  }
+  return { h, s, l };
+}
+
+function isBrandColor(hex: string): boolean {
+  const { s, l } = hexToHsl(hex);
+  // Skip: near-white (l > 0.92), near-black / very dark (l < 0.18), grey (s < 0.15)
+  // Dark navy backgrounds like #142444 have l ≈ 0.17 and get excluded here
+  if (l > 0.92 || l < 0.18 || s < 0.15) return false;
+  return true;
 }
 
 /**
- * Pull every colour mentioned in <style> blocks and inline style="" attributes.
- * Returns colours ranked by frequency, neutrals removed.
+ * Extract brand colours from raw HTML.
+ * Colours that appear without a Tailwind opacity modifier (e.g. /10, /20)
+ * are weighted higher — they're used as solid fills, the real brand colour.
  */
 function extractColorsFromHtml(html: string): string[] {
-  const freq: Record<string, number> = {};
+  const score: Record<string, number> = {};
 
-  const addColor = (raw: string) => {
-    const hex = normaliseColor(raw);
-    if (hex && !isNeutral(hex)) freq[hex] = (freq[hex] ?? 0) + 1;
+  const add = (raw: string, weight: number) => {
+    const hex = normaliseHex(raw);
+    if (hex && isBrandColor(hex)) score[hex] = (score[hex] ?? 0) + weight;
   };
 
-  // All hex colours anywhere in the document
+  // Hex colours — check if immediately followed by / (Tailwind opacity modifier)
+  // Solid use → weight 2, tinted/opacity modifier → weight 0.25
   for (const m of html.matchAll(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g)) {
-    addColor(m[0]);
+    const charAfter = html[m.index! + m[0].length];
+    const isOpacity = charAfter === "/";
+    add(m[0], isOpacity ? 0.25 : 2);
   }
 
-  // rgb()/rgba() values
-  for (const m of html.matchAll(/rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+[^)]*\)/g)) {
-    addColor(m[0]);
+  // rgb() / rgba() — always solid usage
+  for (const m of html.matchAll(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)[^)]*\)/g)) {
+    const hex = `#${[m[1], m[2], m[3]].map(n => parseInt(n).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+    add(hex, 1);
   }
 
-  return Object.entries(freq)
+  return Object.entries(score)
     .sort((a, b) => b[1] - a[1])
     .map(([hex]) => hex);
+}
+
+// ── Logo helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Find the logo URL from raw HTML.
+ * Priority:
+ *  1. <img> whose alt contains "logo"
+ *  2. <img> whose src path contains "logo"
+ *  3. <link rel="apple-touch-icon"> or <link rel="icon"> with an image href
+ *  4. og:image meta tag (already extracted in metadata)
+ */
+function extractLogoFromHtml(html: string, baseUrl: string): string | null {
+  const toAbsolute = (src: string): string => {
+    if (/^https?:\/\//i.test(src)) return src;
+    try { return new URL(src, baseUrl).href; } catch { return src; }
+  };
+
+  // 1 + 2: <img> tags
+  for (const m of html.matchAll(/<img\b([^>]*?)>/gi)) {
+    const tag  = m[1];
+    const src  = tag.match(/\bsrc=["']([^"']+)["']/i)?.[1];
+    const alt  = tag.match(/\balt=["']([^"']*)["']/i)?.[1] ?? "";
+    if (!src) continue;
+    // Skip tiny icons, spacers, data URIs, and watermark/decorative images
+    if (/data:/i.test(src))                          continue;
+    if (/watermark|spacer|pixel|blank/i.test(src))   continue;
+    if (/aria-hidden=["']true["']/i.test(tag))       continue;
+    if (/logo/i.test(alt) || /logo/i.test(src))      return toAbsolute(src);
+  }
+
+  // 3: <link rel="apple-touch-icon"> (high-res favicon often used as logo)
+  const touchIcon = html.match(/<link[^>]+rel=["'][^"']*apple-touch-icon[^"']*["'][^>]+href=["']([^"']+)["']/i)
+                 ?? html.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["'][^"']*apple-touch-icon[^"']*["']/i);
+  if (touchIcon) return toAbsolute(touchIcon[1]);
+
+  return null;
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -81,7 +122,6 @@ export async function scrapeBrandFromUrl(url: string): Promise<ScrapedBrand> {
   const apiKey = process.env.FIRECRAWL_API_KEY;
   if (!apiKey) throw new Error("FIRECRAWL_API_KEY is not configured");
 
-  // Fetch markdown + html + LLM extract in one call
   const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
     method: "POST",
     headers: {
@@ -90,13 +130,9 @@ export async function scrapeBrandFromUrl(url: string): Promise<ScrapedBrand> {
     },
     body: JSON.stringify({
       url,
-      formats: ["markdown", "html", "extract"],
+      formats: ["html", "extract"],
       extract: {
-        prompt: `Extract brand information from this website:
-1. brandName — the company or brand name
-2. logoUrl — the direct https:// URL to the company logo image (look for <img> tags where src or alt contains "logo", or the og:image meta tag)
-3. description — one sentence describing what the company does
-Return null for any field you cannot confidently identify. Do NOT guess colours — colours will be extracted from CSS separately.`,
+        prompt: "Extract: 1) brandName — the company or brand name. 2) description — one sentence describing what the company does. Return null for any field you cannot confidently identify.",
       },
     }),
   });
@@ -114,16 +150,17 @@ Return null for any field you cannot confidently identify. Do NOT guess colours 
   const metadata = data.metadata ?? {};
   const html     = data.html     ?? "";
 
-  // ── Extract real brand colours from the page HTML/CSS ──
-  const brandColors    = extractColorsFromHtml(html);
-  const primary_color  = brandColors[0] ?? null;
+  // Colours from real CSS in the HTML
+  const brandColors     = extractColorsFromHtml(html);
+  const primary_color   = brandColors[0] ?? null;
   const secondary_color = brandColors[1] ?? null;
 
-  // ── Best logo URL ──
-  // Try: LLM result → og:image → favicon (last resort, skip)
-  const logo_url = extract.logoUrl ?? metadata.ogImage ?? null;
+  // Logo from HTML parsing → og:image fallback
+  const logo_url = extractLogoFromHtml(html, url)
+                ?? metadata.ogImage
+                ?? null;
 
-  const name        = extract.brandName  ?? metadata.ogSiteName ?? metadata.title ?? null;
+  const name        = extract.brandName   ?? metadata.ogSiteName ?? metadata.title ?? null;
   const description = extract.description ?? metadata.description ?? null;
 
   return {
