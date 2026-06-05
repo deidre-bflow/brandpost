@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Palette, CalendarDays, Sparkles, Link2 } from "lucide-react";
+import { LayoutDashboard, Palette, CalendarDays, Sparkles, Link2, CheckCircle2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/dashboard",   label: "Dashboard",   icon: LayoutDashboard },
-  { href: "/brands",      label: "Brands",      icon: Palette },
-  { href: "/generate",    label: "Generate",    icon: Sparkles },
-  { href: "/calendar",    label: "Calendar",    icon: CalendarDays },
-  { href: "/connections", label: "Connections", icon: Link2 },
+  { href: "/dashboard",   label: "Dashboard",    icon: LayoutDashboard },
+  { href: "/brands",      label: "Brands",       icon: Palette },
+  { href: "/generate",    label: "Generate",     icon: Sparkles },
+  { href: "/calendar",    label: "Calendar",     icon: CalendarDays },
+  { href: "/approved",    label: "Approved",     icon: CheckCircle2 },
+  { href: "/declined",    label: "Needs Changes",icon: AlertCircle },
+  { href: "/connections", label: "Connections",  icon: Link2 },
 ];
 
 export function SidebarNav() {

@@ -41,6 +41,12 @@ export async function PATCH(
       update.client_approved    = body.approved;
       update.client_approved_at = body.approved ? new Date().toISOString() : null;
     }
+    if (typeof body.clientName === "string") {
+      update.client_name = body.clientName || null;
+    }
+    if (typeof body.clientPosition === "string") {
+      update.client_position = body.clientPosition || null;
+    }
 
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: "Nothing to update" }, { status: 400 });

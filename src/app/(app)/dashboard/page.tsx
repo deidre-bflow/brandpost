@@ -49,8 +49,8 @@ export default async function DashboardPage() {
     { label: "Total Posts",  value: postCount    ?? 0, gradient: "from-blue-500 to-cyan-500",      icon: CalendarDays,  href: "/calendar" },
     { label: "Drafts",       value: draftCount   ?? 0, gradient: "from-amber-400 to-orange-500",   icon: Clock,         href: "/calendar" },
     { label: "Published",    value: postedCount  ?? 0, gradient: "from-emerald-400 to-teal-500",   icon: TrendingUp,    href: "/calendar" },
-    { label: "Approved",     value: approvedCount ?? 0, gradient: "from-green-400 to-emerald-600", icon: CheckCircle2,  href: "/calendar" },
-    { label: "Commented",    value: commentCount  ?? 0, gradient: "from-pink-400 to-rose-500",     icon: MessageSquare, href: "/calendar" },
+    { label: "Approved",     value: approvedCount ?? 0, gradient: "from-green-400 to-emerald-600", icon: CheckCircle2,  href: "/approved" },
+    { label: "Needs Changes", value: commentCount ?? 0, gradient: "from-amber-400 to-orange-500",  icon: MessageSquare, href: "/declined" },
   ];
 
   return (

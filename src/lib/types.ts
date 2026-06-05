@@ -35,10 +35,12 @@ export interface Post {
   generation_batch: string | null;
   // image generation
   image_provider: "ideogram" | "higgsfield";
-  // client review
+  // client review + audit trail
   client_comment: string | null;
   client_approved: boolean;
   client_approved_at: string | null;
+  client_name: string | null;
+  client_position: string | null;
   created_at: string;
   updated_at: string;
   // joined

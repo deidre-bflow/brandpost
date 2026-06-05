@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await userSupabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { brandId, label } = await req.json();
+    const { brandId, label, postIds } = await req.json();
     if (!brandId) return NextResponse.json({ error: "brandId required" }, { status: 400 });
 
     const { data: brand } = await userSupabase
@@ -25,7 +25,11 @@ export async function POST(req: NextRequest) {
     const admin = await createAdminClient();
     const { data: link, error } = await admin
       .from("review_links")
-      .insert({ brand_id: brandId, label: label ?? null })
+      .insert({
+        brand_id: brandId,
+        label:    label    ?? null,
+        post_ids: postIds  ?? null,
+      })
       .select("token")
       .single();
 

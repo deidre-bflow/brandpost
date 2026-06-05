@@ -13,7 +13,7 @@ export async function GET(
     // Resolve token → brand
     const { data: link } = await supabase
       .from("review_links")
-      .select("brand_id, label, expires_at")
+      .select("brand_id, label, expires_at, post_ids")
       .eq("token", token)
       .single();
 
@@ -30,13 +30,20 @@ export async function GET(
       .eq("id", link.brand_id)
       .single();
 
-    // Fetch all upcoming / unposted posts for this brand
-    const { data: posts } = await supabase
+    // Fetch posts — filtered to specific IDs if this is a re-share link
+    let postsQuery = supabase
       .from("posts")
-      .select("id, platform, content, image_url, video_url, scheduled_for, status, client_comment, client_approved, client_approved_at")
+      .select("id, platform, content, image_url, video_url, scheduled_for, status, client_comment, client_approved, client_approved_at, client_name, client_position")
       .eq("brand_id", link.brand_id)
-      .in("status", ["draft", "approved"])
       .order("scheduled_for", { ascending: true });
+
+    if (link.post_ids?.length) {
+      postsQuery = postsQuery.in("id", link.post_ids);
+    } else {
+      postsQuery = postsQuery.in("status", ["draft", "approved"]);
+    }
+
+    const { data: posts } = await postsQuery;
 
     return NextResponse.json({ brand, posts: posts ?? [], label: link.label });
   } catch (err: any) {
