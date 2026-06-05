@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, isToday } from "date-fns";
-import { ChevronLeft, ChevronRight, ImageIcon, Check, Loader2, Copy, Filter, Upload, Share2, X, Link2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImageIcon, Check, Loader2, Copy, Filter, Upload, Share2, X, Link2, Film } from "lucide-react";
 import { FacebookIcon, InstagramIcon, LinkedInIcon } from "@/components/PlatformIcons";
 import type { Post, Brand, Platform } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -387,28 +387,34 @@ export default function CalendarPage() {
                         </button>
                       </div>
                     ) : (
-                      <div className="w-full aspect-square bg-slate-50 flex flex-col items-center justify-center gap-2.5">
-                        <button
-                          onClick={() => handleGenerateImage(post)}
-                          disabled={generatingImg === post.id || uploadingMedia === post.id}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-semibold transition-colors disabled:opacity-50"
-                        >
-                          {generatingImg === post.id
-                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
-                            : <>
-                                <ImageIcon className="h-3.5 w-3.5" />
-                                Generate Image
-                                <span className={cn(
-                                  "ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full",
-                                  post.image_provider === "higgsfield"
-                                    ? "bg-green-200 text-green-800"
-                                    : "bg-orange-100 text-orange-700"
-                                )}>
-                                  {post.image_provider === "higgsfield" ? "Higgsfield" : "Ideogram"}
-                                </span>
-                              </>
-                          }
-                        </button>
+                      <div className="w-full aspect-square bg-slate-50 flex flex-col items-center justify-center gap-2.5 px-4">
+                        {post.image_provider === "higgsfield" ? (
+                          /* Higgsfield — generated via Claude MCP, not server-side */
+                          <div className="flex flex-col items-center gap-2 text-center">
+                            <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+                              <Film className="h-5 w-5 text-green-600" />
+                            </div>
+                            <p className="text-xs font-semibold text-slate-700">Higgsfield image</p>
+                            <p className="text-[10px] text-slate-400 leading-tight">
+                              Ask Claude to generate this image, then upload it below.
+                            </p>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleGenerateImage(post)}
+                            disabled={generatingImg === post.id || uploadingMedia === post.id}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-semibold transition-colors disabled:opacity-50"
+                          >
+                            {generatingImg === post.id
+                              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
+                              : <><ImageIcon className="h-3.5 w-3.5" /> Generate Image
+                                  <span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                                    Ideogram
+                                  </span>
+                                </>
+                            }
+                          </button>
+                        )}
                         <button
                           onClick={() => handleUploadMedia(post)}
                           disabled={generatingImg === post.id || uploadingMedia === post.id}
