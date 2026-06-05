@@ -1,101 +1,108 @@
 /**
  * Higgsfield image generation
- * Docs: https://docs.higgsfield.ai
  *
- * Models suited for social media posts:
- *   marketing_studio_image — commercial / product / ads  (default)
- *   nano_banana_pro        — highest quality, 4K
- *   soul_2                 — portraits / fashion / UGC
+ * Auth:  Authorization: Bearer {HIGGSFIELD_API_SECRET}
+ * MCP:   https://mcp.higgsfield.ai/mcp  (JSON-RPC over SSE)
+ *
+ * Best models for social media posts:
+ *   marketing_studio_image — branded commercial/product ads
+ *   gpt_image_2            — default high-fidelity, text/graphics
+ *   nano_banana_pro        — character/cartoon, top quality
+ *   text2image_soul_v2     — lifestyle/fashion/UGC editorial
  */
 
-const BASE    = "https://api.higgsfield.ai";
-const getKey  = () => process.env.HIGGSFIELD_API_KEY ?? "";
+const MCP_URL = "https://mcp.higgsfield.ai/mcp";
 
 export type HiggsfieldModel =
   | "marketing_studio_image"
+  | "gpt_image_2"
   | "nano_banana_pro"
-  | "soul_2";
+  | "nano_banana_2"
+  | "text2image_soul_v2";
 
 export async function generateImageWithHighgsfield(
   prompt: string,
-  model: HiggsfieldModel = "marketing_studio_image",
+  model: HiggsfieldModel = "gpt_image_2",
 ): Promise<string> {
-  const apiKey = getKey();
-  if (!apiKey) throw new Error("HIGGSFIELD_API_KEY is not configured");
+  const secret = process.env.HIGGSFIELD_API_SECRET;
+  if (!secret) throw new Error("HIGGSFIELD_API_SECRET is not configured");
 
   const headers = {
-    Authorization: `Bearer ${apiKey}`,
+    Authorization: `Bearer ${secret}`,
     "Content-Type": "application/json",
+    Accept: "application/json, text/event-stream",
   };
 
-  // ── Submit generation job ─────────────────────────────────────────────────
-  const submitRes = await fetch(`${BASE}/v1/generation`, {
-    method:  "POST",
+  // ── Call via MCP HTTP transport (JSON-RPC over SSE) ───────────────────────
+  const res = await fetch(MCP_URL, {
+    method: "POST",
     headers,
     body: JSON.stringify({
-      model,
-      prompt,
-      aspect_ratio: "1:1",
-      num_samples:  1,
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: {
+        name: "generate_image",
+        arguments: {
+          params: {
+            model,
+            prompt,
+            aspect_ratio: "1:1",
+          },
+        },
+      },
+      id: Date.now(),
     }),
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(120_000), // 2 min — generation can take ~30–60s
   });
 
-  const submitData = await submitRes.json();
-
-  if (!submitRes.ok) {
-    throw new Error(
-      submitData?.message ?? submitData?.error ?? `Higgsfield ${submitRes.status}`,
-    );
+  if (!res.ok) {
+    throw new Error(`Higgsfield MCP HTTP ${res.status}: ${await res.text().catch(() => "")}`);
   }
 
-  // Some models return the URL immediately; others return a job ID to poll.
-  const immediateUrl = pickUrl(submitData);
-  if (immediateUrl) return immediateUrl;
+  // ── Parse SSE response ────────────────────────────────────────────────────
+  const body   = await res.text();
+  const lines  = body.split("\n").filter(l => l.startsWith("data:"));
 
-  const jobId =
-    submitData?.job_id ??
-    submitData?.id     ??
-    submitData?.generation_id;
+  for (const line of lines) {
+    try {
+      const data = JSON.parse(line.slice(5));
 
-  if (!jobId) throw new Error("Higgsfield returned no job ID or image URL");
+      // Error from generation backend
+      if (data?.result?.isError) {
+        const msg = data.result.structuredContent?.error
+          ?? data.result.content?.[0]?.text
+          ?? "Higgsfield generation failed";
+        throw new Error(msg);
+      }
 
-  // ── Poll for completion (max 60 s, 2 s interval) ──────────────────────────
-  for (let i = 0; i < 30; i++) {
-    await delay(2_000);
-
-    const pollRes  = await fetch(`${BASE}/v1/generation/${jobId}`, { headers });
-    const pollData = await pollRes.json();
-    const status   = (pollData?.status ?? "").toLowerCase();
-
-    if (["completed", "success", "succeeded", "done"].includes(status)) {
-      const url = pickUrl(pollData);
-      if (url) return url;
-      throw new Error("Higgsfield completed but no image URL in response");
+      // Success — extract image URL from content
+      if (data?.result?.content) {
+        for (const item of data.result.content) {
+          // Image item
+          if (item.type === "image" && item.url) return item.url;
+          if (item.type === "image" && item.data) {
+            // base64 — upload to Supabase instead of returning inline
+            // (rare — most models return URLs)
+            return `data:image/jpeg;base64,${item.data}`;
+          }
+          // URL embedded in text
+          if (item.type === "text") {
+            const match = item.text?.match(/https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)/i);
+            if (match) return match[0];
+            // Some models return structured JSON with URL
+            try {
+              const parsed = JSON.parse(item.text ?? "");
+              const url = parsed?.url ?? parsed?.image_url ?? parsed?.output?.[0]?.url;
+              if (url) return url;
+            } catch { /* not JSON */ }
+          }
+        }
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.includes("generation")) throw e;
+      // Parse error on this line — continue to next
     }
-
-    if (["failed", "error", "cancelled"].includes(status)) {
-      throw new Error(pollData?.error ?? pollData?.message ?? "Higgsfield generation failed");
-    }
-    // status is pending/processing — keep polling
   }
 
-  throw new Error("Higgsfield image generation timed out after 60 s");
+  throw new Error("Higgsfield returned no image URL in response");
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function pickUrl(data: any): string | null {
-  if (!data) return null;
-  return (
-    data?.output?.[0]?.url ??
-    data?.images?.[0]?.url ??
-    data?.results?.[0]?.url ??
-    data?.data?.[0]?.url   ??
-    data?.url              ??
-    data?.image_url        ??
-    null
-  );
-}
-
-const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
