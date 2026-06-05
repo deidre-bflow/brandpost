@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, ImageIcon, Film } from "lucide-react";
 import { FacebookIcon, InstagramIcon, LinkedInIcon } from "@/components/PlatformIcons";
 import type { Brand, Platform } from "@/lib/types";
 import { format, addDays } from "date-fns";
@@ -59,6 +59,7 @@ export default function GeneratePage() {
   const [postsPerWeek, setPostsPerWeek] = useState(4);
   const [weeks,        setWeeks]        = useState(4);
   const [startDate,    setStartDate]    = useState(format(new Date(), "yyyy-MM-dd"));
+  const [imageProvider, setImageProvider] = useState<"ideogram" | "higgsfield">("ideogram");
   const [generating,   setGenerating]   = useState(false);
   const [progress,     setProgress]     = useState("");
   const [error,        setError]        = useState<string | null>(null);
@@ -91,7 +92,7 @@ export default function GeneratePage() {
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, platform, startDate, postsPerWeek, weeks }),
+          body: JSON.stringify({ brandId, platform, startDate, postsPerWeek, weeks, imageProvider }),
         });
         const rawText = await res.text();
         let data: any;
@@ -193,6 +194,62 @@ export default function GeneratePage() {
         <div className="grid grid-cols-2 gap-4">
           <ToggleGroup label="Posts per week" options={[2, 4]} value={postsPerWeek} onChange={setPostsPerWeek} />
           <ToggleGroup label="Number of weeks" options={[2, 4]} value={weeks}        onChange={setWeeks} />
+        </div>
+
+        {/* Image provider selector */}
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
+            Image Provider
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {/* Ideogram */}
+            <button
+              type="button"
+              onClick={() => setImageProvider("ideogram")}
+              className={`flex flex-col items-start gap-2 p-4 rounded-xl border transition-all text-left ${
+                imageProvider === "ideogram"
+                  ? "border-violet-400 bg-violet-50 ring-1 ring-violet-400"
+                  : "border-slate-200 bg-white hover:border-violet-200"
+              }`}
+            >
+              <div className="flex items-center gap-2 w-full">
+                <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                  <ImageIcon className="h-4 w-4 text-orange-600" />
+                </div>
+                <span className="font-bold text-slate-800 text-sm">Ideogram</span>
+                {imageProvider === "ideogram" && (
+                  <span className="ml-auto text-[10px] font-bold text-violet-600 bg-violet-100 px-1.5 py-0.5 rounded-full">Selected</span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 leading-tight">
+                AI art, illustrated &amp; stylised visuals. Great for creative brand content.
+              </p>
+            </button>
+
+            {/* Higgsfield */}
+            <button
+              type="button"
+              onClick={() => setImageProvider("higgsfield")}
+              className={`flex flex-col items-start gap-2 p-4 rounded-xl border transition-all text-left ${
+                imageProvider === "higgsfield"
+                  ? "border-violet-400 bg-violet-50 ring-1 ring-violet-400"
+                  : "border-slate-200 bg-white hover:border-violet-200"
+              }`}
+            >
+              <div className="flex items-center gap-2 w-full">
+                <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <Film className="h-4 w-4 text-green-600" />
+                </div>
+                <span className="font-bold text-slate-800 text-sm">Higgsfield</span>
+                {imageProvider === "higgsfield" && (
+                  <span className="ml-auto text-[10px] font-bold text-violet-600 bg-violet-100 px-1.5 py-0.5 rounded-full">Selected</span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 leading-tight">
+                Photorealistic &amp; commercial quality. Best for product &amp; lifestyle shots.
+              </p>
+            </button>
+          </div>
         </div>
 
         {/* Summary */}

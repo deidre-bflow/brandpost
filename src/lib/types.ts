@@ -33,6 +33,8 @@ export interface Post {
   scheduled_for: string | null;
   status: PostStatus;
   generation_batch: string | null;
+  // image generation
+  image_provider: "ideogram" | "higgsfield";
   // client review
   client_comment: string | null;
   client_approved: boolean;

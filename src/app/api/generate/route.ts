@@ -23,12 +23,13 @@ function postToDayOffset(postNumber: number, postsPerWeek: number): number {
 
 export async function POST(req: NextRequest) {
   try {
-    const { brandId, platform, startDate, postsPerWeek = 4, weeks = 4 } = await req.json() as {
+    const { brandId, platform, startDate, postsPerWeek = 4, weeks = 4, imageProvider = "ideogram" } = await req.json() as {
       brandId: string;
       platform: Platform;
       startDate: string;
       postsPerWeek?: number;
       weeks?: number;
+      imageProvider?: "ideogram" | "higgsfield";
     };
 
     if (!brandId || !platform) {
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
       platform:         p.platform,
       content:          p.content,
       image_prompt:     p.image_prompt,
+      image_provider:   imageProvider,
       scheduled_for:    format(
         addDays(baseDate, postToDayOffset(p.postNumber, postsPerWeek ?? 4)),
         "yyyy-MM-dd'T'10:00:00"

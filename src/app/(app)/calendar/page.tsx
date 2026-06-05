@@ -395,7 +395,18 @@ export default function CalendarPage() {
                         >
                           {generatingImg === post.id
                             ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
-                            : <><ImageIcon className="h-3.5 w-3.5" /> Generate Image</>
+                            : <>
+                                <ImageIcon className="h-3.5 w-3.5" />
+                                Generate Image
+                                <span className={cn(
+                                  "ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full",
+                                  post.image_provider === "higgsfield"
+                                    ? "bg-green-200 text-green-800"
+                                    : "bg-orange-100 text-orange-700"
+                                )}>
+                                  {post.image_provider === "higgsfield" ? "Higgsfield" : "Ideogram"}
+                                </span>
+                              </>
                           }
                         </button>
                         <button

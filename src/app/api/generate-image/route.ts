@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateImage, remixImage } from "@/lib/ideogram";
+import { generateImageWithHighgsfield } from "@/lib/higgsfield";
 import { createAdminClient } from "@/lib/supabase/server";
 import sharp from "sharp";
 
@@ -93,34 +94,40 @@ export async function POST(req: NextRequest) {
 
     const supabase = await createAdminClient();
 
-    // Fetch post → brand (logo + product reference images)
+    // Fetch post → brand (logo + product reference images) + provider choice
     const { data: post } = await supabase
       .from("posts")
-      .select("brand_id, brand:brands(logo_url, product_images)")
+      .select("image_provider, brand_id, brand:brands(logo_url, product_images)")
       .eq("id", postId)
       .single();
 
-    const brand = post?.brand as any;
+    const brand          = post?.brand as any;
     const logoUrl: string | null = brand?.logo_url ?? null;
     const productImages: Record<string, string> = brand?.product_images ?? {};
+    const provider       = (post?.image_provider ?? "ideogram") as "ideogram" | "higgsfield";
 
-    // Find if a product reference photo matches this post's prompt
-    const referenceUrl = findReferenceUrl(prompt, productImages);
+    // ── Generate raw image URL via the chosen provider ────────────────────────
+    let rawUrl: string;
 
-    // Generate image — remix if reference exists, otherwise generate fresh
-    let ideogramUrl: string;
-    if (referenceUrl) {
-      console.log("[generate-image] Using remix with reference:", referenceUrl);
-      ideogramUrl = await remixImage(prompt, referenceUrl);
+    if (provider === "higgsfield") {
+      console.log("[generate-image] Using Higgsfield");
+      rawUrl = await generateImageWithHighgsfield(prompt);
     } else {
-      console.log("[generate-image] No reference found, generating fresh");
-      ideogramUrl = await generateImage(prompt);
+      // Ideogram: remix against a reference product image if one matches
+      const referenceUrl = findReferenceUrl(prompt, productImages);
+      if (referenceUrl) {
+        console.log("[generate-image] Ideogram remix with reference:", referenceUrl);
+        rawUrl = await remixImage(prompt, referenceUrl);
+      } else {
+        console.log("[generate-image] Ideogram fresh generate");
+        rawUrl = await generateImage(prompt);
+      }
     }
 
     // Overlay logo if available
-    let finalUrl = ideogramUrl;
+    let finalUrl = rawUrl;
     if (logoUrl) {
-      const imageBuffer = await fetchBuffer(ideogramUrl);
+      const imageBuffer = await fetchBuffer(rawUrl);
       if (imageBuffer) {
         const composited = await overlayLogo(imageBuffer, logoUrl);
         const storagePath = `post-images/${postId}.jpg`;
