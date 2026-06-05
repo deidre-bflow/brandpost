@@ -43,6 +43,17 @@ export interface Post {
   brand?: Pick<Brand, "id" | "name" | "primary_color" | "logo_url">;
 }
 
+export interface SocialConnection {
+  id: string;
+  brand_id: string;
+  platform: Platform;
+  account_id: string;
+  account_name: string | null;
+  token_expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ReviewLink {
   id: string;
   token: string;

@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { LayoutDashboard, Palette, CalendarDays, Sparkles, LogOut } from "lucide-react";
+import { LayoutDashboard, Palette, CalendarDays, Sparkles, Link2, LogOut } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard",  icon: LayoutDashboard },
-  { href: "/brands",    label: "Brands",     icon: Palette },
-  { href: "/generate",  label: "Generate",   icon: Sparkles },
-  { href: "/calendar",  label: "Calendar",   icon: CalendarDays },
+  { href: "/dashboard",    label: "Dashboard",   icon: LayoutDashboard },
+  { href: "/brands",       label: "Brands",      icon: Palette },
+  { href: "/generate",     label: "Generate",    icon: Sparkles },
+  { href: "/calendar",     label: "Calendar",    icon: CalendarDays },
+  { href: "/connections",  label: "Connections", icon: Link2 },
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
