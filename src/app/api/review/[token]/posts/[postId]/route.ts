@@ -47,6 +47,9 @@ export async function PATCH(
     if (typeof body.clientPosition === "string") {
       update.client_position = body.clientPosition || null;
     }
+    if (body.status === "declined" || body.status === "draft" || body.status === "approved") {
+      update.status = body.status;
+    }
 
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: "Nothing to update" }, { status: 400 });

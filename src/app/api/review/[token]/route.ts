@@ -33,14 +33,14 @@ export async function GET(
     // Fetch posts — filtered to specific IDs if this is a re-share link
     let postsQuery = supabase
       .from("posts")
-      .select("id, platform, content, image_url, video_url, scheduled_for, status, client_comment, client_approved, client_approved_at, client_name, client_position")
+      .select("id, platform, content, image_url, image_prompt, video_url, scheduled_for, status, client_comment, client_approved, client_approved_at, client_name, client_position")
       .eq("brand_id", link.brand_id)
       .order("scheduled_for", { ascending: true });
 
     if (link.post_ids?.length) {
       postsQuery = postsQuery.in("id", link.post_ids);
     } else {
-      postsQuery = postsQuery.in("status", ["draft", "approved"]);
+      postsQuery = postsQuery.in("status", ["draft", "approved", "declined"]);
     }
 
     const { data: posts } = await postsQuery;

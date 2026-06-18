@@ -13,6 +13,7 @@ interface ReviewPost {
   platform: Platform;
   content: string;
   image_url: string | null;
+  image_prompt: string | null;
   video_url: string | null;
   scheduled_for: string | null;
   status: string;
@@ -80,9 +81,9 @@ function IdentityModal({ onConfirm }: { onConfirm: (r: Reviewer) => void }) {
             <BrandflowMark size={28} />
             <span className="font-black text-base" style={{ color: "#a5b4fc" }}>Brand<span style={{ color: "#f9a8d4" }}>flow</span></span>
           </div>
-          <h2 className="text-white font-bold text-lg leading-tight">Before you approve</h2>
+          <h2 className="text-white font-bold text-lg leading-tight">Identify yourself first</h2>
           <p className="text-white/50 text-sm mt-1">
-            Please introduce yourself so your approval is recorded correctly.
+            Please introduce yourself so your feedback is recorded correctly.
           </p>
         </div>
 
@@ -133,24 +134,88 @@ function IdentityModal({ onConfirm }: { onConfirm: (r: Reviewer) => void }) {
   );
 }
 
+// ── Carousel viewer ───────────────────────────────────────────────────────────
+function CarouselViewer({ images, alt }: { images: string[]; alt: string }) {
+  const [idx, setIdx] = useState(0);
+  if (images.length === 0) return null;
+  if (images.length === 1) return <img src={images[0]} alt={alt} className="w-full aspect-square object-cover" />;
+
+  return (
+    <div className="relative w-full aspect-square bg-black overflow-hidden group">
+      <img src={images[idx]} alt={`${alt} ${idx + 1}`} className="w-full h-full object-cover transition-opacity duration-300" />
+
+      {/* Prev */}
+      {idx > 0 && (
+        <button
+          onClick={() => setIdx(i => i - 1)}
+          className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+      )}
+      {/* Next */}
+      {idx < images.length - 1 && (
+        <button
+          onClick={() => setIdx(i => i + 1)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      )}
+
+      {/* Dots */}
+      <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+        {images.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => setIdx(i)}
+            className={cn(
+              "rounded-full transition-all duration-200",
+              i === idx ? "w-4 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/50 hover:bg-white/80",
+            )}
+          />
+        ))}
+      </div>
+
+      {/* Counter */}
+      <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/50 text-white text-[10px] font-bold">
+        {idx + 1} / {images.length}
+      </div>
+    </div>
+  );
+}
+
 // ── Post tile ─────────────────────────────────────────────────────────────────
-function PostTile({ post, token, reviewer, onApproveRequest, onUpdate }: {
+function PostTile({ post, token, reviewer, onReviewRequest, onUpdate }: {
   post: ReviewPost;
   token: string;
   reviewer: Reviewer | null;
-  onApproveRequest: (postId: string) => void;
+  onReviewRequest: (postId: string, action: "approve" | "decline") => void;
   onUpdate: (id: string, patch: Partial<ReviewPost>) => void;
 }) {
   const [comment, setComment]   = useState(post.client_comment ?? "");
   const [approved, setApproved] = useState(post.client_approved);
+  const [declined, setDeclined] = useState(post.status === "declined");
   const [saving, setSaving]     = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [declineError, setDeclineError] = useState("");
 
   const style = PLATFORM_STYLES[post.platform] ?? PLATFORM_STYLES.facebook;
+
+  // Parse carousel images from image_prompt field
+  const carouselImages: string[] = (() => {
+    try {
+      if (!post.image_prompt) return post.image_url ? [post.image_url] : [];
+      const parsed = JSON.parse(post.image_prompt);
+      if (Array.isArray(parsed.carousel) && parsed.carousel.length > 0) return parsed.carousel;
+    } catch { /* not JSON */ }
+    return post.image_url ? [post.image_url] : [];
+  })();
 
   const save = useCallback(async (patch: {
     comment?: string;
     approved?: boolean;
+    status?: string;
     clientName?: string;
     clientPosition?: string;
   }) => {
@@ -162,10 +227,11 @@ function PostTile({ post, token, reviewer, onApproveRequest, onUpdate }: {
         body: JSON.stringify(patch),
       });
       onUpdate(post.id, {
-        ...(patch.comment       !== undefined ? { client_comment:   patch.comment || null }  : {}),
-        ...(patch.approved      !== undefined ? { client_approved:  patch.approved }         : {}),
-        ...(patch.clientName    !== undefined ? { client_name:      patch.clientName || null } : {}),
-        ...(patch.clientPosition !== undefined ? { client_position: patch.clientPosition || null } : {}),
+        ...(patch.comment        !== undefined ? { client_comment:  patch.comment || null }           : {}),
+        ...(patch.approved       !== undefined ? { client_approved: patch.approved }                  : {}),
+        ...(patch.status         !== undefined ? { status:          patch.status }                    : {}),
+        ...(patch.clientName     !== undefined ? { client_name:     patch.clientName || null }        : {}),
+        ...(patch.clientPosition !== undefined ? { client_position: patch.clientPosition || null }    : {}),
       });
     } finally {
       setSaving(false);
@@ -174,32 +240,53 @@ function PostTile({ post, token, reviewer, onApproveRequest, onUpdate }: {
 
   const handleApproveClick = () => {
     if (!approved) {
-      // Need identity before approving
-      if (!reviewer) { onApproveRequest(post.id); return; }
+      if (!reviewer) { onReviewRequest(post.id, "approve"); return; }
       setApproved(true);
-      void save({ approved: true, clientName: reviewer.name, clientPosition: reviewer.position });
+      setDeclined(false);
+      void save({ approved: true, status: "approved", clientName: reviewer.name, clientPosition: reviewer.position });
     } else {
       setApproved(false);
-      void save({ approved: false });
+      void save({ approved: false, status: "draft" });
+    }
+  };
+
+  const handleDeclineClick = () => {
+    if (!declined) {
+      if (!reviewer) { onReviewRequest(post.id, "decline"); return; }
+      if (!comment.trim()) { setDeclineError("Please leave a comment explaining what needs to change before declining."); return; }
+      setDeclineError("");
+      setDeclined(true);
+      setApproved(false);
+      void save({ approved: false, status: "declined", comment, clientName: reviewer.name, clientPosition: reviewer.position });
+    } else {
+      setDeclined(false);
+      void save({ approved: false, status: "draft" });
     }
   };
 
   const handleCommentBlur = () => {
-    if (comment !== (post.client_comment ?? "")) void save({ comment });
+    if (comment !== (post.client_comment ?? "")) {
+      setDeclineError("");
+      void save({ comment });
+    }
   };
 
   const LIMIT = 200;
   const isLong = post.content.length > LIMIT;
   const displayContent = isLong && !expanded ? post.content.slice(0, LIMIT) + "…" : post.content;
 
-  return (
-    <div className={cn(
-      "flex flex-col rounded-2xl overflow-hidden transition-all duration-300 bg-white border shadow-sm",
-      approved ? "border-emerald-300 shadow-emerald-100 shadow-md" : "border-slate-200 hover:shadow-md",
-    )}>
-      {approved && <div className="h-0.5 bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400" />}
+  const borderClass = approved
+    ? "border-emerald-300 shadow-emerald-100 shadow-md"
+    : declined
+    ? "border-red-300 shadow-red-100 shadow-md"
+    : "border-slate-200 hover:shadow-md";
 
-      {/* Platform */}
+  return (
+    <div className={cn("flex flex-col rounded-2xl overflow-hidden transition-all duration-300 bg-white border shadow-sm", borderClass)}>
+      {approved && <div className="h-0.5 bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400" />}
+      {declined && <div className="h-0.5 bg-gradient-to-r from-red-400 via-rose-400 to-pink-400" />}
+
+      {/* Platform bar */}
       <div className={cn("flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r", style.gradient)}>
         <span className={cn("w-2 h-2 rounded-full flex-shrink-0", style.dot)} />
         <span className={cn("text-xs font-bold tracking-wide uppercase", style.text)}>{style.label}</span>
@@ -214,14 +301,15 @@ function PostTile({ post, token, reviewer, onApproveRequest, onUpdate }: {
         <div className="ml-auto flex items-center gap-1.5">
           {saving && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
           {approved && !saving && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+          {declined && !saving && <X className="h-4 w-4 text-red-500" />}
         </div>
       </div>
 
-      {/* Media */}
+      {/* Media — carousel or single image */}
       {post.video_url ? (
         <video src={post.video_url} controls className="w-full aspect-video object-cover bg-black" />
-      ) : post.image_url ? (
-        <img src={post.image_url} alt="post visual" className="w-full aspect-square object-cover" />
+      ) : carouselImages.length > 0 ? (
+        <CarouselViewer images={carouselImages} alt="post visual" />
       ) : (
         <div className="w-full aspect-square bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
           <span className="text-slate-300 text-sm">No image yet</span>
@@ -243,26 +331,32 @@ function PostTile({ post, token, reviewer, onApproveRequest, onUpdate }: {
         <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1.5">
           <MessageSquare className="h-3.5 w-3.5" />
           <span className="font-semibold">Your comment</span>
+          {declined && <span className="text-red-400 font-semibold">(required to decline)</span>}
         </div>
         <textarea
           value={comment}
-          onChange={e => setComment(e.target.value)}
+          onChange={e => { setComment(e.target.value); if (declineError) setDeclineError(""); }}
           onBlur={handleCommentBlur}
-          placeholder="Leave feedback or notes…"
+          placeholder={declined ? "What needs to change? (required)" : "Leave feedback or notes…"}
           rows={3}
-          className="w-full text-sm text-slate-700 placeholder:text-slate-300 border border-slate-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-transparent bg-slate-50/50"
+          className={cn(
+            "w-full text-sm text-slate-700 placeholder:text-slate-300 border rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:border-transparent bg-slate-50/50",
+            declineError ? "border-red-300 focus:ring-red-300" : "border-slate-200 focus:ring-violet-300",
+          )}
         />
+        {declineError && <p className="text-xs text-red-500 mt-1">{declineError}</p>}
       </div>
 
-      {/* Approve button */}
-      <div className="px-4 pb-4">
+      {/* Action buttons */}
+      <div className="px-4 pb-4 flex flex-col gap-2">
+        {/* Approve */}
         <button
           onClick={handleApproveClick}
           className={cn(
             "w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 font-bold text-sm transition-all duration-200",
             approved
               ? "border-emerald-400 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700"
-              : "border-slate-200 bg-white text-slate-500 hover:border-violet-400 hover:bg-violet-50 hover:text-violet-700",
+              : "border-slate-200 bg-white text-slate-500 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700",
           )}
         >
           <span className={cn(
@@ -274,9 +368,28 @@ function PostTile({ post, token, reviewer, onApproveRequest, onUpdate }: {
           {approved ? "Approved ✓" : "Approve this post"}
         </button>
 
-        {/* Audit trail display */}
-        {approved && post.client_name && (
-          <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
+        {/* Decline */}
+        <button
+          onClick={handleDeclineClick}
+          className={cn(
+            "w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 font-bold text-sm transition-all duration-200",
+            declined
+              ? "border-red-400 bg-gradient-to-r from-red-50 to-rose-50 text-red-700"
+              : "border-slate-200 bg-white text-slate-400 hover:border-red-300 hover:bg-red-50 hover:text-red-600",
+          )}
+        >
+          <span className={cn(
+            "w-5 h-5 rounded-md flex items-center justify-center border-2 flex-shrink-0 transition-all",
+            declined ? "bg-red-500 border-red-500" : "border-slate-300",
+          )}>
+            {declined && <X className="w-3 h-3 text-white" strokeWidth={3} />}
+          </span>
+          {declined ? "Declined ✕" : "Decline — needs changes"}
+        </button>
+
+        {/* Audit trail */}
+        {(approved || declined) && post.client_name && (
+          <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-400">
             <User className="h-3 w-3 flex-shrink-0" />
             <span>{post.client_name}{post.client_position ? ` · ${post.client_position}` : ""}</span>
           </div>
@@ -297,8 +410,9 @@ export default function ReviewPage() {
   const [submitted, setSubmitted] = useState(false);
 
   // Identity / audit trail state
-  const [reviewer, setReviewer]           = useState<Reviewer | null>(null);
-  const [pendingApproveId, setPendingApprove] = useState<string | null>(null);
+  const [reviewer, setReviewer]               = useState<Reviewer | null>(null);
+  const [pendingReviewId, setPendingReviewId]   = useState<string | null>(null);
+  const [pendingAction, setPendingAction]       = useState<"approve" | "decline" | null>(null);
 
   useEffect(() => {
     fetch(`/api/review/${token}`)
@@ -318,31 +432,39 @@ export default function ReviewPage() {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
   }, []);
 
-  // When a post requests approval but no reviewer set yet
-  const handleApproveRequest = useCallback((postId: string) => {
-    setPendingApprove(postId);
+  const handleReviewRequest = useCallback((postId: string, action: "approve" | "decline") => {
+    setPendingReviewId(postId);
+    setPendingAction(action);
   }, []);
 
-  // After identity modal confirmed — approve the pending post
   const handleIdentityConfirm = useCallback((r: Reviewer) => {
     setReviewer(r);
-    setPendingApprove(null);
-    // The PostTile will re-render; we trigger approval by updating the post state
-    // The tile needs to be told to approve — we use a special state update
-    setPosts(prev => prev.map(p => {
-      if (p.id !== pendingApproveId) return p;
-      // Fire the save
-      fetch(`/api/review/${token}/posts/${p.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ approved: true, clientName: r.name, clientPosition: r.position }),
-      });
-      return { ...p, client_approved: true, client_name: r.name, client_position: r.position };
-    }));
-  }, [pendingApproveId, token]);
+    const id = pendingReviewId;
+    const action = pendingAction;
+    setPendingReviewId(null);
+    setPendingAction(null);
+
+    if (!id || !action) return;
+
+    if (action === "approve") {
+      setPosts(prev => prev.map(p => {
+        if (p.id !== id) return p;
+        fetch(`/api/review/${token}/posts/${p.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ approved: true, status: "approved", clientName: r.name, clientPosition: r.position }),
+        });
+        return { ...p, client_approved: true, status: "approved", client_name: r.name, client_position: r.position };
+      }));
+    }
+    // For decline: identity is confirmed, the tile re-renders with reviewer set.
+    // User still needs to add a comment and click Decline again — prompt them.
+  }, [pendingReviewId, pendingAction, token]);
 
   const approvedCount = posts.filter(p => p.client_approved).length;
+  const declinedCount = posts.filter(p => p.status === "declined").length;
   const total         = posts.length;
+  const allReviewed   = total > 0 && (approvedCount + declinedCount) === total;
   const allApproved   = total > 0 && approvedCount === total;
 
   if (loading) return (
@@ -367,7 +489,7 @@ export default function ReviewPage() {
   return (
     <div className="min-h-screen" style={{ background: "#f0f2f7" }}>
       {/* Identity modal */}
-      {pendingApproveId && <IdentityModal onConfirm={handleIdentityConfirm} />}
+      {pendingReviewId && <IdentityModal onConfirm={handleIdentityConfirm} />}
 
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-white/10" style={{ background: "linear-gradient(135deg,#0c1628 0%,#0f2044 50%,#111827 100%)" }}>
@@ -415,7 +537,9 @@ export default function ReviewPage() {
               </span>
             ) : (
               <div className="hidden sm:flex flex-col items-end gap-1">
-                <span className="text-xs font-semibold text-white/70">{approvedCount} / {total} approved</span>
+                <span className="text-xs font-semibold text-white/70">
+                  {approvedCount} approved{declinedCount > 0 ? ` · ${declinedCount} declined` : ""} / {total}
+                </span>
                 <div className="w-28 h-1.5 bg-white/10 rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all duration-700" style={{ width: `${total ? (approvedCount / total) * 100 : 0}%`, background: "linear-gradient(90deg,#6366f1,#a855f7,#06b6d4)" }} />
                 </div>
@@ -430,8 +554,8 @@ export default function ReviewPage() {
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-slate-900 mb-1">Review your upcoming posts</h1>
           <p className="text-sm text-slate-500">
-            Leave a comment and tick <strong>Approve</strong> on each post. Everything saves automatically.
-            {!reviewer && <span className="text-violet-600 font-semibold"> You'll be asked for your name before your first approval.</span>}
+            Review each post — <strong>Approve</strong> it or <strong>Decline</strong> it with a comment explaining what needs to change. Everything saves automatically.
+            {!reviewer && <span className="text-violet-600 font-semibold"> You'll be asked for your name on your first action.</span>}
           </p>
         </div>
 
@@ -448,7 +572,7 @@ export default function ReviewPage() {
                 post={post}
                 token={token}
                 reviewer={reviewer}
-                onApproveRequest={handleApproveRequest}
+                onReviewRequest={handleReviewRequest}
                 onUpdate={handleUpdate}
               />
             ))}
@@ -468,7 +592,11 @@ export default function ReviewPage() {
                   className="group relative px-10 py-3.5 rounded-2xl text-white font-bold text-sm shadow-lg hover:scale-[1.02] transition-all overflow-hidden"
                   style={{ background: "linear-gradient(135deg,#6366f1,#a855f7,#ec4899)" }}
                 >
-                  {allApproved ? "✓ Submit — all posts approved" : `Submit feedback · ${approvedCount}/${total} approved`}
+                  {allApproved
+                    ? "✓ Submit — all posts approved"
+                    : allReviewed
+                    ? `Submit feedback · ${approvedCount} approved, ${declinedCount} declined`
+                    : `Submit feedback · ${approvedCount + declinedCount}/${total} reviewed`}
                 </button>
                 <p className="text-xs text-slate-400">Comments and approvals save automatically.</p>
               </>
