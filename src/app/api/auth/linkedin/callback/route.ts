@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       body: tokenBody,
     }).then(r => r.json());
 
-    if (!tokenData.access_token) throw new Error("No LinkedIn access token");
+    if (!tokenData.access_token) throw new Error(`LinkedIn token error: ${JSON.stringify(tokenData)}`);
 
     // Get user identity (OpenID Connect)
     const profile = await fetch("https://api.linkedin.com/v2/userinfo", {
