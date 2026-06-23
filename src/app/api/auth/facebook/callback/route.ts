@@ -40,9 +40,9 @@ export async function GET(req: NextRequest) {
     const t2Data    = await fetch(`${FB}/oauth/access_token?${t2Params}`).then(r => r.json());
     const userToken = t2Data.access_token ?? t1Data.access_token;
 
-    // Pages the user manages (includes Instagram business account link)
+    // Pages directly on the user's personal profile
     const pagesData = await fetch(
-      `${FB}/me/accounts?fields=id,name,access_token,instagram_business_account{id,name}&access_token=${userToken}`
+      `${FB}/me/accounts?fields=id,name,access_token,instagram_business_account{id,name}&limit=100&access_token=${userToken}`
     ).then(r => r.json());
 
     const pages: Array<{
@@ -51,6 +51,40 @@ export async function GET(req: NextRequest) {
       access_token: string;
       instagram_business_account?: { id: string; name: string };
     }> = pagesData.data ?? [];
+
+    // Also fetch pages from Business Manager portfolios
+    try {
+      const bizData = await fetch(
+        `${FB}/me/businesses?fields=id,name&limit=100&access_token=${userToken}`
+      ).then(r => r.json());
+
+      const businesses: Array<{ id: string; name: string }> = bizData.data ?? [];
+
+      for (const biz of businesses) {
+        const bizPages = await fetch(
+          `${FB}/${biz.id}/owned_pages?fields=id,name,access_token,instagram_business_account{id,name}&limit=100&access_token=${userToken}`
+        ).then(r => r.json());
+
+        for (const p of (bizPages.data ?? [])) {
+          if (!pages.find(existing => existing.id === p.id)) {
+            pages.push(p);
+          }
+        }
+
+        // Also check client pages (pages shared with the business)
+        const clientPages = await fetch(
+          `${FB}/${biz.id}/client_pages?fields=id,name,access_token,instagram_business_account{id,name}&limit=100&access_token=${userToken}`
+        ).then(r => r.json());
+
+        for (const p of (clientPages.data ?? [])) {
+          if (!pages.find(existing => existing.id === p.id)) {
+            pages.push(p);
+          }
+        }
+      }
+    } catch (bizErr) {
+      console.warn("[fb-callback] business pages fetch failed:", bizErr);
+    }
 
     if (pages.length === 0) {
       return NextResponse.redirect(`${appUrl}/connections?error=no_pages&brandId=${brandId}`);

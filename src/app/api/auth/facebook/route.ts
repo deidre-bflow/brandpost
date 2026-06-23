@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const params = new URLSearchParams({
     client_id:     process.env.FACEBOOK_APP_ID!,
     redirect_uri:  `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/facebook/callback`,
-    scope:         "pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish",
+    scope:         "pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish,business_management",
     state:         `${brandId}:${nonce}`,
     response_type: "code",
   });
