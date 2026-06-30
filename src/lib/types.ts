@@ -28,6 +28,7 @@ export interface Post {
   platform: Platform;
   content: string;
   image_url: string | null;
+  image_urls: string[];
   video_url: string | null;
   image_prompt: string | null;
   scheduled_for: string | null;
