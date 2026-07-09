@@ -58,7 +58,23 @@ export async function publishToInstagram({
   const cData = await cRes.json();
   if (!cRes.ok) throw new Error(cData.error?.message ?? "Instagram container creation failed");
 
-  // Step 2 — publish
+  // Step 2 — wait for processing; publishing before status_code is FINISHED
+  // fails with "Media ID is not available"
+  let status = "IN_PROGRESS";
+  for (let i = 0; i < 12 && status !== "FINISHED"; i++) {
+    await new Promise((r) => setTimeout(r, 2500));
+    const sRes  = await fetch(
+      `${FB}/${cData.id}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`,
+    );
+    const sData = await sRes.json();
+    status = sData.status_code ?? status;
+    if (status === "ERROR" || status === "EXPIRED") {
+      throw new Error(`Instagram media processing failed (${status}) — check the image URL and format`);
+    }
+  }
+  if (status !== "FINISHED") throw new Error("Instagram media processing timed out");
+
+  // Step 3 — publish
   const publishBody = new URLSearchParams({
     creation_id: cData.id,
     access_token: accessToken,
