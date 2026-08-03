@@ -80,3 +80,59 @@ INSTRUCTIONS:
 
   return JSON.parse(clean) as GeneratedPost[];
 }
+
+export interface SinglePostResult {
+  content: string;
+  image_prompt: string;
+}
+
+/** Generate ONE post's caption + hashtags (and a refined image prompt) from a free-text scene/topic description. */
+export async function generateSinglePost(
+  brand: Brand,
+  platform: Platform,
+  sceneDescription: string
+): Promise<SinglePostResult> {
+  const pillars = brand.content_pillars?.length
+    ? brand.content_pillars.join(", ")
+    : "brand awareness, product highlights, industry insights, customer stories, tips & education";
+
+  const prompt = `You are a social media content strategist. Write exactly ONE post.
+
+BRAND: ${brand.name}
+Industry: ${brand.industry ?? "general"} | Tone: ${brand.tone ?? "professional"}
+Audience: ${brand.target_audience ?? "general audience"}
+Content Pillars: ${pillars}
+Brand Notes: ${brand.notes ?? "none"}
+Brand Color: ${brand.primary_color ?? "#000000"}
+
+PLATFORM: ${platform}
+GUIDELINE: ${PLATFORM_GUIDES[platform]}
+
+SCENE / TOPIC DESCRIBED BY THE USER:
+"${sceneDescription}"
+
+INSTRUCTIONS:
+- Write a single caption for this platform based on the scene/topic above, matching the brand's tone and notes
+- image_prompt: Professional commercial photography prompt for AI image generation, derived from the scene/topic. Strict rules:
+  1. NO brand names, logos, or any readable text/lettering anywhere in the image
+  2. The equipment/product MUST be painted in the brand color ${brand.primary_color ?? "#f5a623"} if the scene involves equipment
+  3. Cinematic product photography style — dramatic lighting, dust particles, motion blur on moving parts where relevant
+  4. One concise descriptive sentence only
+- Return ONLY a valid JSON object — no markdown, no explanation
+
+{"content":"...","image_prompt":"..."}`;
+
+  const message = await client.messages.create({
+    model: "claude-haiku-4-5",
+    max_tokens: 1024,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const text = message.content
+    .filter((b) => b.type === "text")
+    .map((b) => (b as { type: "text"; text: string }).text)
+    .join("");
+
+  const clean = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+  return JSON.parse(clean) as SinglePostResult;
+}
