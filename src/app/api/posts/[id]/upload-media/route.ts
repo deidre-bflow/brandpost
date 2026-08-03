@@ -44,10 +44,10 @@ export async function POST(
 
     const supabase = await createAdminClient();
 
-    // Verify the post exists
+    // Verify the post exists (and grab its current image_urls so we can append)
     const { data: post } = await supabase
       .from("posts")
-      .select("id")
+      .select("id, image_urls")
       .eq("id", postId)
       .single();
 
@@ -59,7 +59,7 @@ export async function POST(
     const bucket      = isVideo ? "post-videos" : "post-images";
     const storagePath = isVideo
       ? `post-videos/${postId}.${ext}`
-      : `post-images/${postId}.${ext}`;
+      : `post-images/${postId}-${Date.now()}.${ext}`;
 
     const bytes = await file.arrayBuffer();
     const { error: uploadErr } = await supabase.storage
@@ -74,13 +74,18 @@ export async function POST(
       .from(bucket)
       .getPublicUrl(storagePath);
 
-    const updateField = isVideo ? { video_url: publicUrl } : { image_url: publicUrl };
-    await supabase.from("posts").update(updateField).eq("id", postId);
+    if (isVideo) {
+      await supabase.from("posts").update({ video_url: publicUrl }).eq("id", postId);
+      return NextResponse.json({ video_url: publicUrl, media_type: "video" });
+    }
 
-    return NextResponse.json({
-      ...(isVideo ? { video_url: publicUrl } : { image_url: publicUrl }),
-      media_type: isVideo ? "video" : "image",
-    });
+    const newImageUrls = [...((post.image_urls as string[] | null) ?? []), publicUrl];
+    await supabase.from("posts").update({
+      image_urls: newImageUrls,
+      image_url:  newImageUrls[0],
+    }).eq("id", postId);
+
+    return NextResponse.json({ image_urls: newImageUrls, media_type: "image" });
   } catch (err: any) {
     console.error("[upload-media]", err);
     return NextResponse.json({ error: err.message ?? "Upload failed" }, { status: 500 });
