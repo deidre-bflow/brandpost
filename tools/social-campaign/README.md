@@ -1,12 +1,14 @@
 # SDLG Social Campaign — Recovery & Workflow Guide
 
-This file exists so that a future Claude Code session (even after a total local machine crash, with no memory of this one) can pick the SDLG South Africa Brandflow campaign back up from scratch. Read this first.
+This file exists so that a future Claude Code session (even after a total local machine crash, with no memory of this one) can pick the Brandflow campaigns back up from scratch. Read this first.
 
 ## Where everything lives
 
-- **App code**: this repo, `deidre-bflow/brandpost`, deployed on Vercel (`brandpost-seven.vercel.app`, project `deidre-s-projects2/brandpost`). Shaun (`shaunvanstraaten-sks`) has push access to this repo and is a member of Deidre's Vercel team.
-- **Database + storage**: Supabase project ref `wwzphgxzuzpelhxfwmlm`. All post content (captions, images, schedule) lives in the `posts` table and `post-images` storage bucket.
-- **Backup assets**: Supabase Storage bucket **`claude-recovery-backup`** (private) in the same project. This bucket is **multi-brand** — Brandflow hosts more than one brand, so assets are namespaced per brand to avoid mixups:
+App code: this repo, `deidre-bflow/brandpost`, deployed on Vercel (`brandpost-seven.vercel.app`, project `deidre-s-projects2/brandpost`). Shaun (`shaunvanstraaten-sks`) has push access to this repo and is a member of Deidre's Vercel team.
+
+Database + storage: Supabase project ref `wwzphgxzuzpelhxfwmlm`. All post content (captions, images, schedule) lives in the `posts` table and `post-images` storage bucket.
+
+Backup assets: Supabase Storage bucket `claude-recovery-backup` (private) in the same project. This bucket is multi-brand — Brandflow hosts more than one brand, so assets are namespaced per brand to avoid mixups:
 
 ```
 claude-recovery-backup/
@@ -19,13 +21,27 @@ claude-recovery-backup/
     final-images-<YYYY-MM>/← finished, calendar-ready images for that month
 ```
 
-**When onboarding a new brand**, add a new `<brand-slug>/` folder following the same four-subfolder pattern, and add an entry to `brands.json` (slug → brand_id from the `brands` table, name, any brand-specific notes like tone/rules). Never drop a new brand's files into an existing brand's folder or into the shared `scripts/` folder.
+Public brand assets (logos, product reference photos used by Brandflow's own "New Brand" form and by Higgsfield generations) live in a separate **public** bucket, `brand-assets`, also namespaced per brand:
 
-Currently onboarded: **sdlg-south-africa** (see below for its specifics). Check `brands.json` in the bucket for the full current list — it may have grown since this README was last updated.
+```
+brand-assets/
+  <brand-slug>/
+    logo/
+    products/            ← raw/source product photos
+    reference-cards/     ← real, already-published posts used as the style precedent for that brand's template
+```
+
+When onboarding a new brand, add a new `<brand-slug>/` folder (in both buckets as relevant) following the same pattern, and add an entry to `brands.json` (slug → brand_id from the `brands` table, name, any brand-specific notes like tone/rules). Never drop a new brand's files into an existing brand's folder or into the shared `scripts/` folder.
+
+**Currently onboarded: `sdlg-south-africa`, `sks-hydraulics-africa`** (see below for each brand's specifics). Check `brands.json` in the bucket for the full current list — it may have grown since this README was last updated.
 
 ## The brand image template (critical — don't skip this)
 
-Every SDLG South Africa post image carries a **logo + headline + tagline overlay** on top of the photo — a bare product photo with no overlay is *not* consistent with what's already been published (this was missed once already and had to be redone). Calibrated against a real approved post (`E7210H_July2026.png`) on a 2048×2048 canvas:
+Every brand's post image carries its own fixed visual template on top of the photo — a bare product photo with no overlay is not consistent with what's already been published for that brand. **A template calibrated for one brand is never assumed to apply to another** — always find real approved posts for the specific brand, measure/derive the template from them, and note it below under that brand's own section.
+
+### SDLG South Africa template
+
+Calibrated against a real approved post (`E7210H_July2026.png`) on a 2048×2048 canvas:
 
 - Logo: `SDLG Official Logo.png`, resized to 400px wide, top-left at (80, 85)
 - Headline: SDLG Bold font, ~160px, bottom-left, baseline 198px above the bottom edge (e.g. the machine model, or "SDLG" for factory/heritage posts)
@@ -34,17 +50,28 @@ Every SDLG South Africa post image carries a **logo + headline + tagline overlay
 - All text gets a soft drop shadow (~5px blur) for legibility over photos
 - Canvas must be square 2048×2048 (matches Instagram/Facebook 1:1 and every prior post) — landscape source photos need a center-crop to square first
 
-**This template is SDLG-specific** (its fonts, its logo, its exact positioning) — it is not assumed to apply to other brands. A new brand needs its own template calibrated the same way: find a real approved post for that brand if one exists (or ask what look they want), measure/derive logo and text placement, and note it in a new section of this README under that brand's name. Don't reuse SDLG's exact pixel values for a different brand's aspect ratio or logo shape without re-checking.
+The reusable compositor is `scripts/brand_overlay.py` (function `apply_overlay(src_path, headline, tagline, out_path)`) plus `scripts/square_crop_factory.py` for cropping landscape photos to square first. Its font/logo paths are hardcoded constants for SDLG specifically.
 
-The reusable compositor is `scripts/brand_overlay.py` (function `apply_overlay(src_path, headline, tagline, out_path)`) plus `scripts/square_crop_factory.py` for cropping landscape photos to square first. As written, `brand_overlay.py`'s font/logo paths are hardcoded constants for SDLG — when a second brand needs the same overlay treatment, genericize it to take `font_dir`/`logo_path` as parameters instead of constants, rather than forking the file.
+### SKS Hydraulics Africa template
 
-**Never let AI regenerate the actual machine/product.** Product photos are composited into new (always South African, for SDLG specifically) environments using Higgsfield's `marketing_studio_image` model — pass the real product photo as the `image` role, describe the environment in the prompt. Ideogram is explicitly not to be used for the SDLG brand (Shaun's call) — check whether that rule extends to other brands or was SDLG-specific. The logo/headline/tagline overlay is applied afterward in code (Pillow), never by the image-generation model.
+Calibrated against multiple real, already-published reference posts (`RexrothA10VO-CTA.jpg` was the primary one used; also `Card1-FullRange.jpeg`, `Card3-StopOverpaying.jpeg`, `Card4-WorldMap.jpeg`, `Card5-NameplateMatch.jpeg`, `F12M-NowInStock.jpeg`, `TrustedGloballyNowLocally.jpg`, all backed up under `brand-assets/sks-hydraulics-africa/reference-cards/`). SKS's real published posts actually use several different layouts (collage, world-map stats, nameplate-match CTA, product-in-stock) — the Rexroth-style layout below was chosen as the first reusable template because it generalizes best; the others remain useful references for future template variants.
+
+Rexroth-style layout, 2048×2048 canvas, black (`#0D0D0D`) background with a subtle repeating hexagon-outline texture:
+
+- Real product photo, left side, bleeding to the bottom edge (composited onto a clean blurred dark industrial-workshop background via Higgsfield `marketing_studio_image` first — never let AI redraw the actual part, only the environment/lighting around it)
+- Round SKS badge logo (`SKS-Official-Logo.png`), top-right corner
+- Headline in Poppins ExtraBold (white), e.g. "Looking for {Product} " + a gold (`#F5A623`) highlighted phrase, e.g. "at unbeatable pricing?" — word-wrapped to fit the column width, never hardcoded line breaks
+- Subhead "Contact SKS Hydraulics Africa." in Poppins Bold, white
+- Bullet checklist (gold triangle marker + white Poppins Bold text), e.g. "Local Stock" / "Jet Park, Boksburg"
+- WhatsApp CTA bar: green circle with a simple drawn handset glyph (no external icon asset needed) + "WhatsApp: 076 165 0400" in gold + "for Quick Responses" in white, small
+
+The reusable compositor is `scripts/sks_overlay.py` (function `render_card(...)`), font/logo paths are parameters (not hardcoded), so it's straightforward to adapt for a third brand. Validated with a test render using the `K3V63DT-composited.png` Higgsfield output — no text overflow, no overlap.
 
 ## Creating posts — direct Supabase API (fast path, no browser needed)
 
 Brandflow's own UI requires clicking "Add image" per post, which opens a native OS file picker that browser automation cannot drive — painfully slow for a full month of content. The fix: skip the browser entirely and write straight to Supabase, the same way the app's own code does internally. This works identically for any brand — just swap `BRAND_ID`.
 
-You need the Supabase **service_role** key: Supabase dashboard → this project → Project Settings → API → "service_role" secret. (Vercel's copy of this key is marked "Sensitive" and is write-only — unrecoverable from Vercel, even by the project owner. It must come from Supabase directly, or be re-shared by Shaun.) This key bypasses all Row Level Security — treat it carefully, never commit it, never write it into this repo.
+You need the Supabase service_role key: Supabase dashboard → this project → Project Settings → API → "service_role" secret. (Vercel's copy of this key is marked "Sensitive" and is write-only — unrecoverable from Vercel, even by the project owner. It must come from Supabase directly, or be re-shared by Shaun.) This key bypasses all Row Level Security — treat it carefully, never commit it, never write it into this repo.
 
 ```python
 import json, urllib.request, urllib.error
@@ -85,13 +112,24 @@ This was validated end-to-end creating 17 real posts in ~10 seconds with zero er
 
 ## Brand kit reference — SDLG South Africa (as configured in Brandflow)
 
+- Brand ID: `fb34a9bc-015a-4708-9d8c-f6f64f94a9df`
 - Primary colour `#F5A623`, secondary `#CC1B1B`
 - Tone: Professional. Never position as luxury — value-for-money Chinese equipment brand, emphasize reliability/value/nationwide dealer support
 - Content pillars: Equipment performance & product features · Parts, service & after-sales support · Operator tips & productivity on site · Industry news & project highlights · Dealer network & customer support
 - Caption formula (from real approved posts): short hook → SA-specific location/fact (Cape Town, Durban, Joburg, Limpopo, Northern Cape, eThekwini, quarry/port) → machine spec detail → closing line → `Explore the full SDLG range at https://za.sdlg.com/ or contact your nearest SDLG dealer.` → ~10 hashtags starting `#SDLG #SDLGSouthAfrica`
 - August 2026 cadence: Mon/Tue/Thu/Fri, Instagram + Facebook only (LinkedIn dropped for this month), themes: Factory / Electric Machines / Spare Parts
 
-(Other brands get their own subsection here as they're onboarded — don't assume SDLG's rules apply to them.)
+## Brand kit reference — SKS Hydraulics Africa (as configured in Brandflow, onboarded 2026-08-03)
+
+- Brand ID: `2df71037-e4ef-46b5-b397-31f236ce4a3d`
+- Website `www.skshydraulics.co.za`, WhatsApp `+27 76 165 0400`, address Unit 12, Yaldwyn Rd, Jet Park, Boksburg
+- Primary colour `#F5A623` (gold), secondary `#0D0D0D` (near-black)
+- Tone: Bold. Position as OEM-spec quality at non-OEM pricing — never as "cheap" or low-quality. Never mention competitor names.
+- Content pillars (rotating): Value/pricing pitch (non-OEM parts at OEM spec, up to 60% less) · Product spotlight / now in stock · Company credibility & scale (30+ countries, 15,000+ SKUs, founded 1982) · Nameplate-match service (send a photo, get instant cross-reference & quote) · Downtime-cost urgency (fast dispatch keeps fleets running)
+- Cadence: 3x/week, Mon/Wed/Fri, Instagram + Facebook only
+- Fonts: Anton (condensed display, for tall shout-style headlines used in some reference layouts) and Poppins ExtraBold/Bold (rounded sans, used in the primary `sks_overlay.py` template) — both free Google Fonts (OFL), backed up at `claude-recovery-backup/sks-hydraulics-africa/fonts/`. No brand-specific font file was supplied; these are a visual match, not the brand's actual typeface.
+- Real product photos (raw, pre-Higgsfield) are backed up at `brand-assets/sks-hydraulics-africa/products/` — includes K3V112DT, K3V112DTP, K3V63DT, MFE19 (×2), TA1919, gauge test kit (×2), Rexroth A10VO
+- (Not yet posted this onboarding session — brand kit + template pipeline only. Actual September content still needs to be generated and scheduled.)
 
 ## Known app bugs already fixed (2026-08-03)
 
